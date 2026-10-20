@@ -4,7 +4,7 @@ Dépôt « marketplace » interne. Il contient pour l'instant un plugin :
 
 | Plugin | Contenu |
 |---|---|
-| `licter-decks` | Skill **creer-deck** : construit un deck HTML étape par étape (matière, cadrage, storyline, contenu, style, squelette, finitions, relecture, export, éditeur), avec questions et validation à chaque étape. Skill **editeur-deck** : rend n'importe quel deck ou rapport HTML éditable par l'équipe (éditeur admin par code, 46 à 67 blocs, graphiques, animations et transitions, mode présentation, assistant IA, enregistrement dans un artefact claude.ai partagé), pour tout format de deck (défilement vertical, horizontal, diapositives, Reveal.js, scène 1920 × 1080), avec un deck de départ et des tests automatiques. |
+| `licter-decks` | Skill **creer-deck** : construit un deck HTML étape par étape (matière, cadrage, storyline, contenu, style, squelette, finitions, relecture, oral, export, éditeur), en mode complet ou express, avec questions et validation à chaque étape, et une vue présentateur (notes, slide suivante, chronomètres, écran noir). Skill **editeur-deck** : rend n'importe quel deck ou rapport HTML éditable par l'équipe (éditeur admin par code, 46 à 67 blocs, graphiques, animations et transitions, mode présentation, assistant IA, enregistrement dans un artefact claude.ai partagé), pour tout format de deck (défilement vertical, horizontal, diapositives, Reveal.js, scène 1920 × 1080), avec un deck de départ et des tests automatiques. |
 
 ## Installer (chaque membre de l'équipe)
 
@@ -36,10 +36,20 @@ Le plugin apparaît alors pour chacun dans claude.ai, l'application de bureau et
 /licter-decks:creer-deck sujet, brief ou dossier de matière
 ```
 
-Claude avance en 10 étapes (0 à 9) : préparer la matière, cadrer, storyline, contenu, direction artistique,
-squelette, finitions, relecture, export, éditeur Licter. À chaque étape, il pose ses questions, montre un livrable
-court et attend un « OK » avant de continuer. Il peut aussi se lancer de lui-même quand on lui demande un deck HTML.
-À l'étape 9, il propose de taper `/licter-decks:editeur-deck` sur le fichier final.
+Claude demande d'abord le mode :
+
+- **complet** : 11 étapes (0 à 10), une validation chacune : préparer la matière, cadrer, storyline, contenu,
+  direction artistique, squelette, finitions, relecture, oral, export, éditeur Licter ;
+- **express** : les mêmes étapes regroupées en 4 blocs, 4 validations (decks internes, ateliers, délais courts).
+
+À chaque étape, il pose ses questions, montre un livrable court et attend un « OK » avant de continuer. Il peut aussi
+se lancer de lui-même quand on lui demande un deck HTML.
+
+L'étape **oral** ajoute les notes, le minutage par slide, les questions difficiles et la **vue présentateur** :
+touche **P** dans le deck (fenêtre à part pour le deuxième écran ; **Maj + P** par-dessus le deck), avec la slide
+affichée et la suivante, les notes, les chronomètres (slide, total, rythme), la navigation synchronisée et l'écran
+noir (**B**). À l'étape 10, il prépare `notes_editeur.json` et propose de taper `/licter-decks:editeur-deck` sur le
+fichier final : le mode « Présenter » de l'éditeur reprend alors les mêmes notes et durées.
 
 ### Ajouter l'éditeur à un deck terminé
 

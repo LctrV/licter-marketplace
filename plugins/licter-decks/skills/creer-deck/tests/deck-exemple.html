@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Deck d'exemple</title>
+<style>
+  :root { --bg:#0f172a; --tx:#f8fafc; --ac:#f97316; --mu:#94a3b8; }
+  html { font-size: calc(100vw / 160); }
+  body { margin:0; background:var(--bg); color:var(--tx); font-family:system-ui,sans-serif; overflow:hidden; }
+  #deck > section { position:fixed; inset:0; padding:8rem 10rem; box-sizing:border-box; display:flex; flex-direction:column; justify-content:center; opacity:0; visibility:hidden; transition:opacity .3s; }
+  #deck > section.active { opacity:1; visibility:visible; }
+  h1 { font-size:7rem; margin:0 0 2rem; color:var(--ac); } h2 { font-size:5rem; margin:0 0 2rem; } p { font-size:2.6rem; color:var(--mu); }
+  .kpi { font-size:12rem; font-weight:700; color:var(--ac); }
+  #compteur { position:fixed; right:3rem; bottom:2rem; font-size:1.6rem; color:var(--mu); }
+</style>
+</head>
+<body>
+<main id="deck">
+  <section id="couverture" class="active" data-duree="1">
+    <h1>Bilan e-réputation T3</h1><p>Comité de direction · octobre 2026</p>
+    <aside class="notes"><p>Bonjour à tous. <strong>Message clé</strong> : la livraison est le premier levier.</p></aside>
+  </section>
+  <section id="avis" data-duree="2">
+    <h2>Les avis négatifs ont augmenté de 34 % au T3</h2><div class="kpi">+34 %</div>
+    <aside class="notes"><ul><li>Hausse concentrée sur août</li><li>Source : avis Google, T3 2026</li></ul></aside>
+  </section>
+  <section id="irritants" data-duree="2,5">
+    <h2>La livraison représente 60 % des irritants</h2><p>Retards, colis abîmés, suivi absent.</p>
+    <aside class="notes">Insister sur le suivi de colis.<br>Question attendue : quel prestataire ?</aside>
+  </section>
+  <section id="conclusion">
+    <h2>Trois actions prioritaires</h2><p>Suivi de colis · prestataire · réponse aux avis</p>
+  </section>
+</main>
+<div id="compteur"></div>
+<script>
+  (() => {
+    const secs = () => Array.from(document.querySelectorAll('#deck > section'));
+    let i = 0;
+    function show(k) {
+      const s = secs(); i = Math.max(0, Math.min(s.length - 1, k));
+      s.forEach((el, j) => el.classList.toggle('active', j === i));
+      document.getElementById('compteur').textContent = (i + 1) + ' / ' + s.length;
+      dispatchEvent(new CustomEvent('deck:change', { detail: { id: s[i].id } }));
+    }
+    window.__DECK__ = {
+      ids: () => secs().map(s => s.id),
+      current: () => secs()[i].id,
+      go: id => { const k = secs().findIndex(s => s.id === id); if (k >= 0) show(k); },
+      next: () => show(i + 1),
+      prev: () => show(i - 1)
+    };
+    addEventListener('keydown', e => {
+      if (['ArrowRight', 'PageDown', ' '].includes(e.key)) { e.preventDefault(); show(i + 1); }
+      if (['ArrowLeft', 'PageUp'].includes(e.key)) { e.preventDefault(); show(i - 1); }
+    });
+    show(0);
+  })();
+</script>
+</body>
+</html>

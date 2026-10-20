@@ -24,7 +24,8 @@ claude plugin update licter-decks@licter
 
 1. Cloner le dépôt : `git clone https://github.com/LctrV/licter-marketplace.git`, créer une branche.
 2. Modifier ce qu'il faut :
-   - workflow de création : `plugins/licter-decks/skills/creer-deck/SKILL.md` ;
+   - workflow de création : `plugins/licter-decks/skills/creer-deck/SKILL.md` ; vue présentateur :
+     `creer-deck/assets/presentateur.js` (sans balise de fin `</head>`, `</body>`, `</html>` ni `</script>` dans le code) ;
    - instructions de l'éditeur : `plugins/licter-decks/skills/editeur-deck/SKILL.md` (et `reference/contrat.md`) ;
    - éditeur : `skills/editeur-deck/assets/editor.js` et `editor.css` ;
    - injection : `scripts/inject.py` ; deck de départ : `templates/deck-vierge.html`.
@@ -38,6 +39,13 @@ node tests/navigation.mjs /tmp/v.html T vertical
 ```
 
    et de même sur les decks de `tests/exemples/` (horizontal, diapositives 1920, Reveal.js : voir le LISEZMOI).
+   Pour la vue présentateur (depuis `plugins/licter-decks/skills/creer-deck`) :
+
+```bash
+python3 scripts/ajouter_presentateur.py tests/deck-exemple.html -o /tmp/p.html
+node tests/presentateur.mjs /tmp/p.html
+```
+
    Chaque test doit afficher `"ok": true`.
 4. **Incrémenter la version** dans `plugins/licter-decks/.claude-plugin/plugin.json` (1.1.0 → 1.1.1 pour un correctif,
    1.2.0 pour une nouveauté). Sans cela, personne ne reçoit la modification.
