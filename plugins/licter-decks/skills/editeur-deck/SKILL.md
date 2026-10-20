@@ -1,11 +1,20 @@
 ---
 name: editeur-deck
-description: Ajoute l'éditeur admin Licter à un deck ou rapport HTML (modifications par code d'accès, blocs, graphiques, animations, présentation, enregistrement dans un artefact claude.ai partagé), ou crée un nouveau deck HTML éditable à partir du modèle Licter. À utiliser quand on veut rendre un deck HTML modifiable par l'équipe ou par un client, le publier comme artefact éditable, ou mettre à jour l'éditeur d'un deck existant.
-argument-hint: "[fichier.html ou « nouveau »]"
-allowed-tools: Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/inject.py *), Bash(node ${CLAUDE_SKILL_DIR}/tests/smoke.mjs *)
+description: Ajoute l'éditeur admin Licter (modifications par code d'accès, blocs, animations, présentation, artefact claude.ai partagé) à un deck HTML DÉJÀ TERMINÉ. À utiliser UNIQUEMENT quand l'utilisateur demande explicitement d'ajouter l'éditeur Licter à un deck fini (« ajoute l'éditeur », « rends ce deck éditable », « mets l'éditeur Licter dessus ») ou de mettre à jour l'éditeur d'un deck qui l'a déjà. Ne jamais l'utiliser de sa propre initiative, ni pendant la création ou la modification d'un deck, ni pour créer un deck.
+argument-hint: "[deck_termine.html]"
+allowed-tools: Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/inject.py *), Bash(node ${CLAUDE_SKILL_DIR}/tests/smoke.mjs *), Bash(node ${CLAUDE_SKILL_DIR}/tests/navigation.mjs *)
 ---
 
 # Éditeur de deck Licter
+
+## Quand l'utiliser (règle de l'équipe)
+
+- **Seulement sur demande explicite de l'utilisateur**, et **à la fin**, sur un deck **déjà terminé**.
+- Ne jamais ajouter l'éditeur de sa propre initiative : ni en créant un deck, ni en le modifiant, ni « pour bien faire ».
+  Créer un deck reste un travail normal, sans éditeur ; on peut tout au plus rappeler en une ligne, à la livraison,
+  que l'éditeur peut être ajouté sur demande.
+- Si le deck n'est visiblement pas fini (contenu provisoire, sections vides, demande de modifications en cours),
+  le dire et demander confirmation avant d'injecter : l'éditeur se pose en dernier.
 
 L'éditeur est un calque posé par-dessus un deck HTML : rien n'est réécrit dans le deck, toutes les retouches
 (textes, positions, styles, blocs ajoutés, pages, animations, réglages lecteur) forment un objet `edits`
@@ -17,7 +26,7 @@ Fichiers du skill :
 - [assets/editor.js](assets/editor.js), [assets/editor.css](assets/editor.css) : l'éditeur (ne pas modifier à la main dans un deck : réinjecter).
 - [scripts/inject.py](scripts/inject.py) : injection dans un deck.
 - [tests/smoke.mjs](tests/smoke.mjs) : test automatique (blocs, outils, mobile).
-- [templates/deck-vierge.html](templates/deck-vierge.html) : deck de départ conforme.
+- [templates/deck-vierge.html](templates/deck-vierge.html) : deck de départ conforme (uniquement si l'utilisateur demande expressément ce modèle).
 - [reference/contrat.md](reference/contrat.md) : configuration complète, données Licter, capacités d'artefact. Le lire avant une intégration inhabituelle.
 
 ## 1. Vérifier que le deck est compatible
@@ -43,8 +52,8 @@ mis à l'échelle avec elle : scène 1920 × 1080, Reveal.js 960 × 700, deck à
 
 Si le deck re-génère ses sections en JavaScript au chargement (comme les decks Licter v5), passer `--rebuild`.
 
-Pour un **nouveau deck**, partir de `templates/deck-vierge.html` (conteneur `#deck`, 5 sections d'exemple,
-typographie et couleurs Licter, mise à l'échelle et mobile prêts) et remplacer le contenu.
+Le modèle `templates/deck-vierge.html` (conteneur `#deck`, 5 sections d'exemple, typographie et couleurs Licter)
+n'est utilisé que si l'utilisateur le demande expressément ; il ne remplace pas le deck de l'utilisateur.
 
 ## 2. Injecter l'éditeur
 
