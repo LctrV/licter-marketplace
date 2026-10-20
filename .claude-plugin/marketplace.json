@@ -1,0 +1,12 @@
+{
+  "name": "licter",
+  "description": "Plugins internes Licter pour Claude",
+  "owner": { "name": "Licter" },
+  "plugins": [
+    {
+      "name": "licter-decks",
+      "source": "./plugins/licter-decks",
+      "description": "Éditeur admin pour les decks et rapports HTML Licter : modifications par code, blocs, graphiques, animations, présentation, enregistrement dans un artefact claude.ai partagé."
+    }
+  ]
+}

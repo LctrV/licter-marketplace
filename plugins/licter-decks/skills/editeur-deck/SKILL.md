@@ -1,0 +1,87 @@
+---
+name: editeur-deck
+description: Ajoute l'éditeur admin Licter à un deck ou rapport HTML (modifications par code d'accès, blocs, graphiques, animations, présentation, enregistrement dans un artefact claude.ai partagé), ou crée un nouveau deck HTML éditable à partir du modèle Licter. À utiliser quand on veut rendre un deck HTML modifiable par l'équipe ou par un client, le publier comme artefact éditable, ou mettre à jour l'éditeur d'un deck existant.
+argument-hint: "[fichier.html ou « nouveau »]"
+allowed-tools: Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/inject.py *), Bash(node ${CLAUDE_SKILL_DIR}/tests/smoke.mjs *)
+---
+
+# Éditeur de deck Licter
+
+L'éditeur est un calque posé par-dessus un deck HTML : rien n'est réécrit dans le deck, toutes les retouches
+(textes, positions, styles, blocs ajoutés, pages, animations, réglages lecteur) forment un objet `edits`
+enregistré à part (`edits.json` dans l'artefact, ou le navigateur en local). Accès par code admin
+(bouton ⚿ en bas à gauche ou Ctrl/Cmd + Maj + E) ; le code est un verrou d'interface, pas une sécurité :
+les vrais droits d'enregistrement sont ceux de l'artefact.
+
+Fichiers du skill :
+- [assets/editor.js](assets/editor.js), [assets/editor.css](assets/editor.css) : l'éditeur (ne pas modifier à la main dans un deck : réinjecter).
+- [scripts/inject.py](scripts/inject.py) : injection dans un deck.
+- [tests/smoke.mjs](tests/smoke.mjs) : test automatique (blocs, outils, mobile).
+- [templates/deck-vierge.html](templates/deck-vierge.html) : deck de départ conforme.
+- [reference/contrat.md](reference/contrat.md) : configuration complète, données Licter, capacités d'artefact. Le lire avant une intégration inhabituelle.
+
+## 1. Vérifier que le deck est compatible
+
+Le deck doit avoir **un conteneur** (ex. `<main id="deck">`) dont **chaque enfant direct est une `<section id="…">`**
+(une section = une page pour l'éditeur). Les `id` doivent être stables d'un build à l'autre : ce sont les
+adresses des modifications enregistrées. Si le deck n'a pas cette structure, l'adapter (envelopper les slides
+dans des `<section id>`), sans toucher au contenu.
+
+Si le deck re-génère ses sections en JavaScript au chargement (comme les decks Licter v5), passer `--rebuild`.
+
+Pour un **nouveau deck**, partir de `templates/deck-vierge.html` (conteneur `#deck`, 5 sections d'exemple,
+typographie et couleurs Licter, mise à l'échelle et mobile prêts) et remplacer le contenu.
+
+## 2. Injecter l'éditeur
+
+```bash
+python3 ${CLAUDE_SKILL_DIR}/scripts/inject.py deck.html -o deck_editable.html \
+  --root "#deck" --client "Nom du client" --sector "luxe" --code "CodeAdmin" --period "Octobre 2026"
+```
+
+- `--root` : sélecteur du conteneur (défaut `#app5`). `--client` : nom affiché (fichiers exportés, e-mails, prompts IA).
+- `--code` : code admin (défaut `Licter2026@`) ; demander à l'utilisateur s'il en veut un propre au client.
+- `--tokens vars.json` : variables `{{cle}}` utilisables dans les textes ajoutés (`{"publications": ["Publications", "12 480"]}`).
+- `--edits edits.json` : embarquer des modifications déjà faites. `--artifact` : sortie au format artefact (voir étape 4).
+- Relancer le script sur un fichier déjà équipé remplace l'ancienne version de l'éditeur (mise à jour).
+
+## 3. Tester
+
+```bash
+node ${CLAUDE_SKILL_DIR}/tests/smoke.mjs deck_editable.html CodeAdmin ./captures
+```
+
+Prérequis : le paquet `playwright` (`npm i playwright` dans un dossier de travail, puis lancer depuis ce dossier,
+ou `PLAYWRIGHT=/chemin/vers/node_modules/playwright`). Chrome installé est utilisé s'il existe.
+Le test doit afficher `"ok": true` : tous les blocs et outils sans erreur, aucun débordement horizontal à 390 px.
+Regarder les captures (`1_admin.png`, `3_lecteur.png`) avant de livrer.
+
+## 4. Publier comme artefact partagé (recommandé pour l'équipe et le client)
+
+1. Produire la version artefact : `inject.py … --artifact -o deck_artefact.html`.
+2. Publier avec l'outil Artifact, `file_path` = ce fichier, et ces capacités (elles servent à l'enregistrement,
+   aux images, aux téléchargements, à l'IA, aux commentaires et à la présence) :
+   `{"artifact": {}, "assets": {}, "downloads": true, "sample": {"images": true}, "comments": {"composer_only": true}, "room": {}}`
+3. **Mises à jour** : republier le même `file_path` (ou l'URL de l'artefact) **sans passer `files`**, pour conserver
+   l'`edits.json` enregistré depuis la page. En cas de conflit de version, relire l'artefact, vérifier que seules
+   les modifications de l'équipe diffèrent, puis republier.
+4. Donner à l'utilisateur le lien et le code admin. Le partage (« toute personne disposant du lien ») se règle
+   depuis le menu Partager de la page.
+
+En local (sans artefact), les modifications restent dans le navigateur : « Exporter » produit `edits.json`
+(à réinjecter avec `--edits`), « Télécharger » produit un HTML autonome avec les modifications.
+
+## 5. Données e-réputation Licter (optionnel)
+
+Si le deck fournit `window.__STORY__ = {meta, labels, data}` au format des rapports e-réputation Licter
+(publications quotidiennes, tonalité, EMV, matrice, concurrents, baromètre, historique), l'éditeur active
+en plus les variables chiffrées (`{{publications}}`, `{{sentiment_net}}`…), les blocs « Données », les graphiques
+prêts à l'emploi, les alertes et les modèles de page analytiques. Sans ces données, ces menus sont masqués
+et les variables inconnues deviennent « [à compléter] ». Détail du format : [reference/contrat.md](reference/contrat.md).
+
+## Limites à rappeler
+
+- Les modifications visent les éléments par leur position dans chaque section : si la structure d'une section change
+  fortement au build suivant, certaines retouches de cette section peuvent ne plus s'appliquer (les blocs ajoutés, eux, restent).
+- Les modifications d'un deck ne se transfèrent pas à un autre deck ; « Mes blocs » (bibliothèque) et la charte s'exportent.
+- Le code admin n'est qu'un verrou d'interface.

@@ -1,0 +1,7 @@
+{
+  "name": "licter-decks",
+  "version": "1.0.0",
+  "description": "Rend n'importe quel deck HTML éditable par l'équipe Licter (éditeur admin par code, blocs, graphiques, animations, présentation, artefact claude.ai partagé) et fournit un deck de départ.",
+  "author": { "name": "Licter" },
+  "keywords": ["deck", "html", "éditeur", "rapport", "artefact", "licter"]
+}
