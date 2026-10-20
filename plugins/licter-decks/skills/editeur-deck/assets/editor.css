@@ -925,3 +925,29 @@ td.res.hit { color: #ffb547 !important; }
 
 /* decks quelconques : pas de défilement horizontal sur mobile, même avec des blocs ajoutés hors cadre */
 @media (max-width: 760px) { html { overflow-x: hidden; } #app5 > section { overflow-x: clip; } }
+
+/* ---------- formats de lecture imposés par l'éditeur ---------- */
+/* horizontal : pages côte à côte, aimantées */
+html.ed-fmt-h, html.ed-fmt-h body { height: 100%; overflow: hidden; }
+html.ed-fmt-h #app5 { display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; width: 100vw; height: 100vh; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; scroll-behavior: smooth; overscroll-behavior: contain; scrollbar-width: none; }
+html.ed-fmt-h #app5::-webkit-scrollbar { display: none; }
+html.ed-fmt-h #app5 > section { flex: 0 0 100vw !important; width: 100vw !important; height: 100vh !important; min-height: 0 !important; overflow-y: auto; overflow-x: hidden; scroll-snap-align: start; scroll-snap-stop: always; }
+html.ed-fmt-h #app5 > section { display: block !important; position: relative !important; inset: auto !important; opacity: 1 !important; visibility: visible !important; transform: none !important; }
+html.ed-fmt-h #app5, html.ed-fmt-s #app5 { transform: none !important; left: 0 !important; top: 0 !important; margin: 0 !important; zoom: 1; }
+/* diapositives : une page à la fois */
+html.ed-fmt-s, html.ed-fmt-s body { height: 100%; overflow: hidden; }
+html.ed-fmt-s #app5 { position: relative !important; width: 100vw; height: 100vh; overflow: hidden; }
+html.ed-fmt-s #app5 > section { display: block !important; position: absolute !important; inset: 0 !important; width: 100vw !important; height: 100vh !important; min-height: 0 !important; overflow-y: auto; overflow-x: hidden; opacity: 0; visibility: hidden; pointer-events: none;
+  transition: opacity .55s ease, transform .6s cubic-bezier(.2, .7, .2, 1), visibility 0s linear .6s; }
+html.ed-fmt-s #app5 > section.ed-cur { display: block !important; opacity: 1 !important; visibility: visible !important; pointer-events: auto !important; transition: opacity .55s ease, transform .6s cubic-bezier(.2, .7, .2, 1), visibility 0s; z-index: 1; }
+html.ed-fmt-s.ed-sfx-slide #app5 > section:not(.ed-cur) { transform: translateX(6%); }
+html.ed-fmt-s.ed-sfx-zoom #app5 > section:not(.ed-cur) { transform: scale(.94); }
+html.ed-fmt-s.ed-sfx-none #app5 > section { transition: none; }
+/* vertical imposé à un deck à diapositives ou horizontal : toutes les pages empilées et visibles */
+html.ed-fmt-v, html.ed-fmt-v body { height: auto !important; overflow: auto !important; }
+html.ed-fmt-v #app5 { display: block !important; position: relative !important; width: auto !important; height: auto !important; overflow: visible !important; transform: none !important; }
+html.ed-fmt-v #app5 > section { display: block !important; position: relative !important; inset: auto !important; opacity: 1 !important; visibility: visible !important; transform: none !important; min-height: 100vh; }
+@media (prefers-reduced-motion: reduce) { html.ed-fmt-s #app5 > section { transition: none; } html.ed-fmt-h #app5 { scroll-behavior: auto; } }
+
+/* les blocs ajoutés passent au premier plan par défaut (le réglage « plan » de chaque bloc, en style en ligne, reste prioritaire) */
+#app5 .ed-add { z-index: 4; }

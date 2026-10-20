@@ -41,6 +41,8 @@ def main():
     ap.add_argument("--period", default="", help="période du deck (ex. « Octobre 2026 ») : variable {{mois}} et nom des sauvegardes")
     ap.add_argument("--tokens", help="JSON {cle: valeur} ou {cle: [libellé, valeur]} : variables {{cle}} des textes ajoutés")
     ap.add_argument("--edits", help="edits.json à embarquer (modifications déjà faites)")
+    ap.add_argument("--unit", choices=["auto", "rem", "px"], default="auto", help="unité des blocs ajoutés : rem si la police racine suit la largeur (vw), sinon px de maquette (défaut : auto)")
+    ap.add_argument("--layout", choices=["auto", "vertical", "horizontal", "slides"], default="auto", help="format du deck (défaut : détecté au chargement)")
     ap.add_argument("--rebuild", action="store_true", help="le deck re-génère ses sections en JavaScript (comme les decks Licter v5)")
     ap.add_argument("--artifact", action="store_true", help="sortie au format artefact claude.ai (sans doctype/html/head/body)")
     a = ap.parse_args()
@@ -59,13 +61,20 @@ def main():
     if a.root != "#app5":
         css = css.replace("#app5", a.root)
 
+    unit = a.unit
+    if unit == "auto":
+        css_all = " ".join(re.findall(r"<style[^>]*>(.*?)</style>", html, re.S | re.I))
+        m = re.search(r"(?:^|[}\s,])(?:html|:root)\s*\{[^}]*?font-size\s*:\s*([^;}]+)", css_all)
+        unit = "rem" if m and re.search(r"vw|vmin|vmax|vh|calc|clamp", m.group(1)) else "px"
     tokens = {}
     if a.period:
         tokens["mois"] = ["Période du deck", a.period]
     if a.tokens:
         tokens.update(json.loads(Path(a.tokens).read_text(encoding="utf-8")))
     cfg = {"root": a.root, "client": a.client, "sector": a.sector or "", "hash": hashlib.sha256(a.code.encode()).hexdigest(),
-           "key": f"licter-edits-{slug(a.client)}-", "file": slug(src.stem)[:40], "rebuild": bool(a.rebuild), "tokens": tokens}
+           "key": f"licter-edits-{slug(a.client)}-", "file": slug(src.stem)[:40], "rebuild": bool(a.rebuild), "tokens": tokens, "unit": unit}
+    if a.layout != "auto":
+        cfg["layout"] = a.layout
     if a.period:
         cfg["period"] = a.period
     edits = Path(a.edits).read_text(encoding="utf-8") if a.edits else json.dumps({"v": 1, "el": {}, "add": [], "bg": {}, "updated": None})
@@ -95,7 +104,7 @@ def main():
 
     out = Path(a.out) if a.out else src.with_name(src.stem + ("_artefact" if a.artifact else "_editable") + ".html")
     out.write_text(html, encoding="utf-8")
-    print(f"✓ Éditeur injecté → {out}  ({len(html) / 1e6:.1f} Mo, {n_sec} section(s), conteneur {a.root})")
+    print(f"✓ Éditeur injecté → {out}  ({len(html) / 1e6:.1f} Mo, {n_sec} section(s), conteneur {a.root}, unité {unit}, format {a.layout})")
     print(f"  Accès admin : bouton ⚿ en bas à gauche ou Ctrl/Cmd + Maj + E, code « {a.code} ».")
 
 

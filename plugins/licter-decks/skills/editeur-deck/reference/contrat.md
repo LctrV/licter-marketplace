@@ -30,6 +30,24 @@
 | `tokens` | `{}` | variables `{{cle}}` : `{ "cle": "valeur" }` ou `{ "cle": ["Libellé", "valeur"] }` |
 | `rebuild` | `true` (v5) / `false` (inject) | le deck re-génère-t-il ses sections en JS ? Si non, « Télécharger » conserve le HTML tel quel |
 | `story` | `window.__STORY__` | source des données Licter (voir plus bas) |
+| `layout` | détecté | `vertical`, `horizontal` ou `slides` (une page à la fois) |
+| `unit` | `rem` (v5) / auto (inject) | unité des blocs ajoutés : `rem` (deck fluide) ou `px` (pixels de maquette de la section) |
+| `go(id)` | — | fonction du deck pour afficher la page `id` (prioritaire sur la navigation automatique) |
+| `current()` | — | fonction du deck qui renvoie l'`id` de la page affichée |
+
+## Navigation selon le format
+
+| Format | Page courante | Aller à une page |
+|---|---|---|
+| vertical | section qui croise le milieu de l'écran | `scrollIntoView` |
+| horizontal | section la plus visible | `scrollIntoView({inline: 'start'})`, sinon flèches simulées |
+| diapositives | section visible (display, visibility, opacité) la plus grande | `go(id)` du deck, sinon `Reveal.slide(i)`, sinon flèches simulées (← →) |
+
+Échelle : une section réduite ou agrandie par `transform` (scène fixe) est mesurée (largeur affichée / largeur de
+maquette) ; glisser, guides, grille et pose des blocs en tiennent compte.
+
+Formats imposés par l'éditeur (Réglages → Format de lecture, `edits.set.fmt` = `v` | `h` | `s`) : classes
+`ed-fmt-v|h|s` sur `<html>`, réservées aux decks fluides.
 
 ## Données e-réputation Licter (facultatif) : `window.__STORY__`
 

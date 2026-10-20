@@ -19,6 +19,9 @@
   /* configuration du deck (window.__DECK_EDITOR__, posée avant ce script) ; valeurs par défaut = deck LVMH v5 */
   const CFG = Object.assign({ root: '#app5', client: 'LVMH', sector: 'luxe', hash: '85eb60620692ed49ebd59af42da637b7e22f7494179cacbb237c204e032c5edc', key: 'lvmh-v5-edits-', file: 'v5' }, window.__DECK_EDITOR__ || {});
   const HASH = CFG.hash, CLIENT = CFG.client, ROOT = CFG.root;
+  /* unité des blocs ajoutés : 'rem' (deck fluide, 1 rem ≈ 1/160 de la largeur, decks Licter) ou 'px' (pixels de maquette de la section :
+     scène 1920 × 1080, Reveal.js 960 × 700, deck à taille fixe) ; inject.py choisit selon la taille de police racine du deck */
+  const DPX = CFG.unit === 'px';
   const app = document.querySelector(ROOT) || document.getElementById('app5');
   const S = CFG.story || window.__STORY__ || {}, D = S.data || {}, LB = S.labels || {};
   const PERIOD = (S.meta && S.meta.period) || CFG.period || 'deck';
@@ -112,10 +115,13 @@
     for (const i of rest.split('.')) { n = n && n.children[+i]; }
     return n || null;
   }
-  const remPx = () => parseFloat(getComputedStyle(document.documentElement).fontSize) || 10;
-  const boxOf = el => el.closest && el.closest('.mx5 .box');
+  /* échelle d'affichage d'une section (scène fixe réduite par transform, etc.) : 1 dans un deck fluide */
+  const secScale = el => { const sc = el && el.closest ? (el.closest(`${ROOT} > section`) || (el.matches && el.matches(`${ROOT} > section`) ? el : null)) : null; if (!sc || !sc.offsetWidth) return 1; const k = sc.getBoundingClientRect().width / sc.offsetWidth; return k > .05 && k < 20 ? k : 1; };
+  const remPx = el => (parseFloat(getComputedStyle(document.documentElement).fontSize) || 10) * secScale(el || (typeof curSection === 'function' && app ? curSection() : null));
+  const boxOf = el => el.closest && (el.closest('.mx5 .box') || (DPX ? el.closest(`${ROOT} > section`) : null));
   const unitOf = el => boxOf(el) ? 'px' : 'rem';
-  const unitPx = el => { const b = boxOf(el); return b ? b.getBoundingClientRect().width / 1600 : remPx(); };
+  const unitPx = el => { const b = boxOf(el); return b ? b.getBoundingClientRect().width / (b.offsetWidth || 1600) : remPx(el); };
+  const pxk = () => DPX ? 10 * (((app && [...app.children].find(x => x.tagName === 'SECTION' && x.offsetWidth)) || {}).offsetWidth || 1600) / 1600 : 10;
   const isAdd = el => !!(el && el.classList && el.classList.contains('ed-add'));
   const addOf = el => E.add.find(a => a.id === el.dataset.addId);
   const addEl = id => document.querySelector(`.ed-add[data-add-id="${id}"]`);
@@ -532,7 +538,7 @@
   const tablePresetDef = key => { const p = tablePresets().find(x => x[0] === key); return p ? p[1] : null; };
   function linkedChart(c) { const d = c && c.src && presetDef(c.src); if (!d) return c; return Object.assign({}, c, { labels: d.labels, series: d.series.map((s, i) => Object.assign({}, s, { color: (c.series && c.series[i] && c.series[i].color) || s.color })), colors: d.colors || c.colors, center: c.center || d.center }); }
   function linkedTable(t) { const d = t && t.src && tablePresetDef(t.src); return d ? Object.assign({}, t, { rows: d.rows }) : t; }
-  const textStyle = (id, u) => { const ts = E.styles.find(x => x.id === id); if (!ts) return {}; const o = Object.assign({}, ts.style); if (u === 'px') for (const k in o) if (typeof o[k] === 'string' && /rem/.test(o[k])) o[k] = o[k].replace(/([\d.]+)rem/g, (_, n) => (+n * 10) + 'px'); return o; };
+  const textStyle = (id, u) => { const ts = E.styles.find(x => x.id === id); if (!ts) return {}; const o = Object.assign({}, ts.style); if (u === 'px') for (const k in o) if (typeof o[k] === 'string' && /rem/.test(o[k])) o[k] = o[k].replace(/([\d.]+)rem/g, (_, n) => (+n * pxk()) + 'px'); return o; };
   function presets() {
     const P = [], days = D.days || [], T = D.tot || {}, tl = (D.baro && D.baro.timeline) || [];
     if (days.length) {
@@ -1172,10 +1178,88 @@
   }
 
   /* ---------- ajout d'éléments ---------- */
+  /* ---------- formats de deck : défilement vertical, défilement horizontal, diapositives ----------
+     NAV donne la page courante et sait y aller, quel que soit le deck :
+     - format natif détecté (ou __DECK_EDITOR__.layout = 'vertical' | 'horizontal' | 'slides') ;
+     - format imposé par l'éditeur (Réglages → Format de lecture : E.set.fmt = 'v' | 'h' | 's') ;
+     - API du deck si fournie (__DECK_EDITOR__.go(id), .current() → id), sinon Reveal.js, sinon défilement,
+       sinon touches fléchées simulées (la plupart des decks à diapositives les écoutent). */
+  const NAV = (() => {
+    let fmt = '', cache = null, last = null, busy = false;
+    const secs = () => app ? [...app.children].filter(s => s.tagName === 'SECTION') : [];
+    const shown = s => { const cs = getComputedStyle(s); if (cs.display === 'none' || cs.visibility === 'hidden' || +cs.opacity < .05) return false; const r = s.getBoundingClientRect(); return r.width > 2 && r.height > 2; };
+    const area = s => { const r = s.getBoundingClientRect(); return Math.max(0, Math.min(innerWidth, r.right) - Math.max(0, r.left)) * Math.max(0, Math.min(innerHeight, r.bottom) - Math.max(0, r.top)); };
+    function detect() {
+      if (CFG.layout && CFG.layout !== 'auto') return CFG.layout;
+      const L = secs(); if (L.length < 2) return 'vertical';
+      const vis = L.filter(shown);
+      if (vis.length < L.length && vis.length <= Math.max(1, Math.ceil(L.length / 3))) return 'slides';
+      const r0 = vis[0].getBoundingClientRect(), r1 = vis[1].getBoundingClientRect(), dx = Math.abs(r1.left - r0.left), dy = Math.abs(r1.top - r0.top);
+      if (dx < 2 && dy < 2) return 'slides';
+      return dx > dy ? 'horizontal' : 'vertical';
+    }
+    function mode() { if (fmt) return { v: 'vertical', h: 'horizontal', s: 'slides' }[fmt]; if (!cache) cache = detect(); return cache; }
+    function current() {
+      if (CFG.current) { const id = CFG.current(); const s = id && document.getElementById(id); if (s) return s; }
+      const L = secs(); if (!L.length) return null;
+      if (fmt === 's') return L.find(s => s.classList.contains('ed-cur')) || L[0];
+      if (mode() === 'vertical') { const cy = innerHeight / 2, s = L.find(s_ => { const r = s_.getBoundingClientRect(); return r.top <= cy && r.bottom >= cy && s_.offsetHeight; }); if (s) return s; }
+      let best = null, ba = 0; L.forEach(s => { if (!shown(s)) return; const a = area(s); if (a > ba) { ba = a; best = s; } }); return best;
+    }
+    const order = () => { const v = typeof visOrder === 'function' ? visOrder() : secs().map(s => s.id); return v.map(id => document.getElementById(id)).filter(Boolean); };
+    async function keys(target) {
+      const o = order(), dir = o.indexOf(target) > o.indexOf(current()) ? 1 : -1;
+      busy = true;
+      try {
+        for (let n = 0; n < 80 && current() !== target; n++) {
+          const before = current(), k = dir > 0 ? ['ArrowRight', 39] : ['ArrowLeft', 37];
+          (document.activeElement && document.activeElement !== document.body ? document.activeElement : document).dispatchEvent(new KeyboardEvent('keydown', { key: k[0], code: k[0], keyCode: k[1], which: k[1], bubbles: true }));
+          await new Promise(r => setTimeout(r, 60));
+          if (current() === before) { await new Promise(r => setTimeout(r, 380)); if (current() === before) break; }
+        }
+      } finally { busy = false; }
+    }
+    function go(t, smooth = true) {
+      const sec = typeof t === 'string' ? document.getElementById(t) : t; if (!sec) return;
+      if (CFG.go) { CFG.go(sec.id); return changed(); }
+      const m = mode();
+      if (fmt === 's') { secs().forEach(s => s.classList.toggle('ed-cur', s === sec)); sec.scrollTop = 0; return changed(); }
+      if (m === 'vertical') { sec.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' }); return; }
+      if (m === 'horizontal') { sec.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', inline: 'start', block: 'nearest' }); setTimeout(() => { if (current() !== sec) keys(sec); else changed(); }, smooth ? 650 : 80); return; }
+      if (window.Reveal && typeof window.Reveal.slide === 'function') { const i = [...sec.parentElement.children].filter(x => x.tagName === 'SECTION').indexOf(sec); if (i >= 0) { window.Reveal.slide(i); return setTimeout(changed, 400); } }
+      keys(sec).then(changed);
+    }
+    function reveal(el, opt) {
+      if (!el) return; const sec = el.closest(`${ROOT} > section`) || el;
+      if (mode() === 'vertical' && !fmt && !CFG.go) { el.scrollIntoView(opt); return; }
+      go(sec, !!(opt && opt.behavior === 'smooth'));
+      if (sec !== el) setTimeout(() => el.scrollIntoView(Object.assign({}, opt || {}, { block: 'nearest', inline: 'nearest' })), 480);
+    }
+    const step = d => { const o = order(), i = o.indexOf(current()); const t = o[Math.max(0, Math.min(o.length - 1, (i < 0 ? 0 : i) + d))]; if (t) go(t); return t; };
+    function progress() { if (mode() === 'vertical' && !fmt) { const h = document.documentElement.scrollHeight - innerHeight; return h > 0 ? scrollY / h : 0; } const o = order(); return o.length > 1 ? Math.max(0, o.indexOf(current())) / (o.length - 1) : 1; }
+    /* échelle d'affichage d'une section (scène 1920 × 1080 réduite par transform, etc.) */
+    const scale = secScale;
+    function changed() { const c = current(), id = c && c.id; if (id !== last) { last = id; dispatchEvent(new CustomEvent('ed-page', { detail: id })); } }
+    const fixed = () => DPX || Math.abs(secScale(secs().find(s => s.offsetWidth) || null) - 1) > .02;
+    function setFmt(f) {
+      if (f && fixed()) f = '';
+      fmt = f || ''; cache = null;
+      const H_ = document.documentElement; ['v', 'h', 's'].forEach(k => H_.classList.toggle('ed-fmt-' + k, fmt === k));
+      if (fmt === 's') { const c = last && document.getElementById(last); secs().forEach((s, i) => s.classList.toggle('ed-cur', c ? s === c : i === 0)); }
+      else secs().forEach(s => s.classList.remove('ed-cur'));
+      /* repartir d'un défilement neutre, puis revenir à la page qui était affichée */
+      if (fmt === 'h' || fmt === 's') scrollTo(0, 0); else if (app) app.scrollLeft = 0;
+      const back = last && document.getElementById(last); if (back && fmt !== 's') requestAnimationFrame(() => go(back, false));
+      changed();
+    }
+    setInterval(changed, 450); addEventListener('scroll', () => requestAnimationFrame(changed), { passive: true, capture: true });
+    addEventListener('resize', () => { cache = null; });
+    return { fixed, mode, current, go, reveal, step, next: () => step(1), prev: () => step(-1), progress, scale, setFmt, fmt: () => fmt, busy: () => busy, secs, first: () => order()[0] };
+  })();
+
   function curSection() {
     if (sel()) return sectionOf(sel());
-    const cy = innerHeight / 2;
-    return [...app.children].find(s => { const r = s.getBoundingClientRect(); return r.top <= cy && r.bottom >= cy && s.offsetHeight; });
+    return NAV.current();
   }
   function container() {
     const cx = innerWidth / 2, cy = innerHeight / 2;
@@ -1192,7 +1276,7 @@
     return JSON.parse(JSON.stringify(d).replace(/\{\{\s*([a-z0-9_]+)\s*\}\}/gi, (m, k) => k in TOKMAP ? m : '[à compléter]'));
   }
   function blockDef0(kind, u) {
-    const k = u === 'px' ? 10 : 1, T = D.tot || {}, cur = T.cur || {};
+    const k = u === 'px' ? pxk() : 1, T = D.tot || {}, cur = T.cur || {};
     const tbl = { rows: [['Indicateur', LB.m || 'Mois', LB.m1 || 'M-1'], ['Publications', '{{publications}}', nfr(T.m1 && T.m1.total)], ['Sentiment net', '{{sentiment_net}}', T.m1 ? sgn(T.m1.net * 100) : ''], ['EMV', '{{emv}}', D.emv && D.emv.m1 ? nfr(D.emv.m1 / 1e6, 1) + ' M€' : '']] };
     const pr = presets(), ch = (pr.find(p => /concurrents/.test(p[0])) || pr[0] || ['', { type: 'bar', labels: ['A', 'B', 'C'], series: [{ name: 'Série 1', values: [3, 5, 2] }] }])[1];
     const tl = { rows: (D.focus || []).filter(f => f.kind === 'daily').map(f => { const t = f.series.reduce((a, p) => p.value > a.value ? p : a, f.series[0]); return [dl(t.date), `${f.sheet} : pic à ${nfr(t.value)} publications`]; }).concat([[LB.m || 'Mois', 'Ajoutez les temps forts du mois']]).slice(0, 5), header: false };
@@ -1260,13 +1344,13 @@
     }[kind];
     const o = JSON.parse(JSON.stringify(d));
     ['w', 'h'].forEach(x => { if (o[x]) o[x] *= k; });
-    if (o.style) for (const [sk, sv] of Object.entries(o.style)) if (typeof sv === 'string' && /rem/.test(sv) && u === 'px') o.style[sk] = sv.replace(/([\d.]+)rem/g, (_, n) => (+n * 10) + 'px');
+    if (o.style) for (const [sk, sv] of Object.entries(o.style)) if (typeof sv === 'string' && /rem/.test(sv) && u === 'px') o.style[sk] = sv.replace(/([\d.]+)rem/g, (_, n) => (+n * pxk()) + 'px');
     return o;
   }
   function addBlock(kind, extra = {}) {
     const parent = container(); if (!parent) return null;
     if (pageLocked(sectionOf(parent))) { status('Page validée et verrouillée : repassez-la « À relire » pour y ajouter des éléments', 'warn'); return null; }
-    const u = parent.closest('.mx5 .box') ? 'px' : 'rem', up = u === 'px' ? parent.getBoundingClientRect().width / 1600 : remPx();
+    const bx = boxOf(parent), u = bx ? 'px' : 'rem', up = bx ? bx.getBoundingClientRect().width / (bx.offsetWidth || 1600) : remPx(parent);
     const r = parent.getBoundingClientRect(), a = Object.assign({ id: uid(), sec: sectionOf(parent).id, parent: parent.classList.contains('ed-pinbox') ? sectionOf(parent).id : (pathOf(parent) || sectionOf(parent).id), u }, blockDef(kind, u), extra);
     const vy = Math.max(r.top, 0), vh = Math.min(r.bottom, innerHeight) - vy;
     if (extra.x == null) a.x = r2(((innerWidth / 2 - r.left) / up) - (a.w || 20) / 2);
@@ -1369,7 +1453,7 @@
     if (tpl === 'chapter') { put('bignum', 6, 18, { html: '0X', w: 40, style: { fontSize: '22rem', color: 'rgba(216,180,122,.25)' } }); put('kicker', 6, 50, { html: 'CHAPITRE' }); put('title', 6, 55, { html: 'Titre du chapitre', w: 120, style: { fontSize: '8rem' } }); put('ornament', 6, 72); }
     if (fill) fill(put);
     changed('Page ajoutée');
-    setTimeout(() => { const s = document.getElementById(id); if (s) s.scrollIntoView({ behavior: 'smooth' }); }, 60);
+    setTimeout(() => { const s = document.getElementById(id); if (s) NAV.reveal(s, { behavior: 'smooth' }); }, 60);
   }
   function movePage(id, dir) { const o = orderNow(), i = o.indexOf(id), j = i + dir; if (i < 0 || j < 0 || j >= o.length) return; snapshot(); [o[i], o[j]] = [o[j], o[i]]; E.order = o; changed(); }
   function dupPage(id) {
@@ -1426,7 +1510,7 @@
     const it = e.target.closest('.ed-pi');
     if (it) {
       const id = it.dataset.id, b = e.target.closest('[data-p]');
-      if (!b) { if (e.target.tagName !== 'INPUT') document.getElementById(id).scrollIntoView({ behavior: 'smooth' }); return; }
+      if (!b) { if (e.target.tagName !== 'INPUT') NAV.reveal(document.getElementById(id), { behavior: 'smooth' }); return; }
       const k = b.dataset.p;
       if (k === 'tpl') { (async () => { const pg_ = E.pages.find(x => x.id === id), nm_ = await ask('Nom du modèle', pageNameFr(id)); if (!nm_) return; snapshot(); E.ptpl.push({ id: uid(), name: nm_, h: pg_.h, bg: E.bg[id] ? JSON.parse(JSON.stringify(E.bg[id])) : undefined, adds: E.add.filter(a => a.sec === id).map(a => { const o_ = JSON.parse(JSON.stringify(a)); delete o_.id; delete o_.sec; delete o_.parent; return o_; }) }); changed(`Modèle « ${nm_} » enregistré : il apparaît dans « Nouvelle page »`); })(); return; }
       if (k === 'up') movePage(id, -1); else if (k === 'down') movePage(id, 1);
@@ -1442,7 +1526,7 @@
       snapshot(); if (b.dataset.l === 'vis') { E.el[p].hidden = !E.el[p].hidden || undefined; } else if (b.dataset.l === 'reset') delete E.el[p]; changed(); return;
     }
     const a = E.add.find(x => x.id === li.dataset.add); if (!a) return;
-    if (!b) { if (e.target.tagName !== 'INPUT') { const el = addEl(a.id); if (el) { select(el); el.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } } return; }
+    if (!b) { if (e.target.tagName !== 'INPUT') { const el = addEl(a.id); if (el) { select(el); NAV.reveal(el, { block: 'nearest', behavior: 'smooth' }); } } return; }
     snapshot();
     const same = E.add.filter(x => x.sec === a.sec).sort((x, y) => +((x.style || {}).zIndex || 30) - +((y.style || {}).zIndex || 30));
     if (b.dataset.l === 'up' || b.dataset.l === 'down') {
@@ -1595,7 +1679,7 @@
     const ask_ = `${SYS}\n\nConsigne : ${AI_ASK[k]}\n\nDonnées du mois (pour vérifier les chiffres) :\n${dataContext()}\n\nTexte :\n${src}`;
     const run = (signal, onT) => sampleFn(ask_, { signal, onText: ({ text }) => onT(text), modelTier: k === 'fix' || k === 'short' ? 'quick' : 'default' });
     if (k === 'titles') return aiModal('Idées de titres', run, [['pick', 'Choisir un titre', t => pickLine(t, l => setText(el, toHtml(l)))]]);
-    aiModal((AI_MODES.find(m => m[0] === k) || [, 'Réécriture'])[1], run, [['ins', 'Ajouter en dessous', t => { const r = el.getBoundingClientRect(), sec = sectionOf(el); if (!sec) return; const sr = sec.getBoundingClientRect(), rp = remPx(); insertBlock('paragraph', { html: toHtml(t), x: r2((r.left - sr.left) / rp), y: r2((r.bottom - sr.top) / rp + 2) }); }], ['rep', 'Remplacer', t => setText(el, toHtml(t))]]);
+    aiModal((AI_MODES.find(m => m[0] === k) || [, 'Réécriture'])[1], run, [['ins', 'Ajouter en dessous', t => { const r = el.getBoundingClientRect(), sec = sectionOf(el); if (!sec) return; const sr = sec.getBoundingClientRect(), rp = remPx(sec); insertBlock('paragraph', { html: toHtml(t), x: r2((r.left - sr.left) / rp), y: r2((r.bottom - sr.top) / rp + 2) }); }], ['rep', 'Remplacer', t => setText(el, toHtml(t))]]);
   }
   function pickLine(t, cb) {
     const ls = t.split(/\n+/).map(x => x.replace(/^[\s\-–•\d.)]+/, '').replace(/^["«]\s*|\s*["»]$/g, '').trim()).filter(Boolean).slice(0, 5);
@@ -1736,8 +1820,8 @@
       <div class="ed-row"><button class="pri" data-m="close">Fermer</button></div>`, true);
     document.getElementById('ed-mbody').onclick = e => {
       const b = e.target.closest('[data-qi]'); if (!b) return; const x = out[+b.dataset.qi]; closeModal();
-      if (x.el) { x.el.scrollIntoView({ block: 'center' }); setTimeout(() => select(x.el), 300); }
-      else { const id = orderNow().find(i => pageName(i) === x.sec); if (id) document.getElementById(id).scrollIntoView(); }
+      if (x.el) { NAV.reveal(x.el, { block: 'center' }); setTimeout(() => select(x.el), 300); }
+      else { const id = orderNow().find(i => pageName(i) === x.sec); if (id) NAV.reveal(document.getElementById(id)); }
     };
   }
 
@@ -1911,7 +1995,7 @@ ${JSON.stringify(ch.map(x => x[1]))}`;
     if (!keep || !strokes.length) { strokes = []; return; }
     const sec = curSection(); if (!sec) return; const pts = strokes.flat(), pad = 6;
     const x0 = Math.min(...pts.map(p_ => p_[0])) - pad, y0 = Math.min(...pts.map(p_ => p_[1])) - pad, x1 = Math.max(...pts.map(p_ => p_[0])) + pad, y1 = Math.max(...pts.map(p_ => p_[1])) + pad;
-    const sr = sec.getBoundingClientRect(), rp = remPx();
+    const sr = sec.getBoundingClientRect(), rp = remPx(sec);
     const d = strokes.map(st_ => { const q = st_.map(p_ => [r2(p_[0] - x0), r2(p_[1] - y0)]); if (q.length < 3) return `M${q[0][0]} ${q[0][1]}L${(q[1] || q[0]).join(' ')}`; let o_ = `M${q[0][0]} ${q[0][1]}`; for (let i = 1; i < q.length - 1; i++) { const mx = (q[i][0] + q[i + 1][0]) / 2, my = (q[i][1] + q[i + 1][1]) / 2; o_ += `Q${q[i][0]} ${q[i][1]} ${r2(mx)} ${r2(my)}`; } return o_; });
     snapshot(); const a = { id: uid(), kind: 'draw', sec: sec.id, parent: sec.id, u: 'rem', x: r2((x0 - sr.left) / rp), y: r2((y0 - sr.top) / rp), w: r2((x1 - x0) / rp), h: r2((y1 - y0) / rp), vb: [r2(x1 - x0), r2(y1 - y0)], d, sw: 3, style: { color: '#d8b47a' }, name: 'Dessin' };
     E.add.push(a); strokes = []; changed('Dessin ajouté'); select(addEl(a.id));
@@ -1961,7 +2045,7 @@ ${JSON.stringify(ch.map(x => x[1]))}`;
   ovL.addEventListener('dragstart', e => { const t = e.target.closest('.ed-ovt'); if (!t) return; ovDrag = t; t.classList.add('drag'); e.dataTransfer.effectAllowed = 'move'; });
   ovL.addEventListener('dragover', e => { const t = e.target.closest('.ed-ovt'); if (!ovDrag || !t || t === ovDrag) return; e.preventDefault(); const r = t.getBoundingClientRect(); t.parentNode.insertBefore(ovDrag, e.clientX > r.left + r.width / 2 ? t.nextSibling : t); });
   ovL.addEventListener('dragend', () => { if (!ovDrag) return; ovDrag.classList.remove('drag'); ovDrag = null; const no = [...document.querySelectorAll('#ed-ov-g .ed-ovt')].map(t => t.dataset.id); if (no.join() !== orderNow().join()) { snapshot(); E.order = no; changed('Pages réordonnées'); document.querySelectorAll('#ed-ov-g .ed-ovt p i').forEach((x, i) => { x.textContent = String(i + 1).padStart(2, '0'); }); } });
-  ovL.addEventListener('click', e => { const t = e.target.closest('.ed-ovt'); if (!t) return; const id = t.dataset.id; ovClose(); document.getElementById(id).scrollIntoView(); });
+  ovL.addEventListener('click', e => { const t = e.target.closest('.ed-ovt'); if (!t) return; const id = t.dataset.id; ovClose(); NAV.reveal(document.getElementById(id)); });
   addEventListener('keydown', e => { if (!ovL.hidden && e.key === 'Escape') { e.stopImmediatePropagation(); ovClose(); } }, true);
 
   /* ---------- variables personnalisées ---------- */
@@ -1989,7 +2073,7 @@ ${JSON.stringify(ch.map(x => x[1]))}`;
   /* ---------- règles, repères, distances ---------- */
   let rulersOn = false, altDown = false, colsOn = false;
   const colsL = H(`<div id="ed-cols" data-ed-ui hidden></div>`); document.body.append(colsL);
-  function colsDraw() { colsL.hidden = !(on && colsOn); if (colsL.hidden) return; const sec = curSection(); if (!sec) return; const r = sec.getBoundingClientRect(), rp = remPx(), mg = 6 * rp, gw = (r.width - 2 * mg - 22 * rp) / 12; colsL.style.left = r.left + mg + 'px'; colsL.style.width = r.width - 2 * mg + 'px'; colsL.style.backgroundImage = `repeating-linear-gradient(90deg, rgba(255,90,200,.07) 0 ${gw}px, transparent ${gw}px ${gw + 2 * rp}px)`; }
+  function colsDraw() { colsL.hidden = !(on && colsOn); if (colsL.hidden) return; const sec = curSection(); if (!sec) return; const r = sec.getBoundingClientRect(), rp = remPx(sec), mg = 6 * rp, gw = (r.width - 2 * mg - 22 * rp) / 12; colsL.style.left = r.left + mg + 'px'; colsL.style.width = r.width - 2 * mg + 'px'; colsL.style.backgroundImage = `repeating-linear-gradient(90deg, rgba(255,90,200,.07) 0 ${gw}px, transparent ${gw}px ${gw + 2 * rp}px)`; }
   addEventListener('scroll', () => { if (colsOn) requestAnimationFrame(colsDraw); }, { passive: true });
   const rulT = H(`<div class="ed-rul t" data-ed-ui hidden></div>`), rulL = H(`<div class="ed-rul l" data-ed-ui hidden></div>`), guideL = H(`<div id="ed-guides" data-ed-ui></div>`), measL = H(`<div id="ed-meas" data-ed-ui></div>`);
   document.body.append(rulT, rulL, guideL, measL);
@@ -1997,12 +2081,12 @@ ${JSON.stringify(ch.map(x => x[1]))}`;
     const showR = on && rulersOn; rulT.hidden = rulL.hidden = !showR;
     const sec = on ? curSection() : null, G = sec && E.guides[sec.id]; guideL.innerHTML = '';
     if (showR && sec) {
-      const r = sec.getBoundingClientRect(), rp = remPx(), stp = 10 * rp;
+      const r = sec.getBoundingClientRect(), rp = remPx(sec), stp = 10 * rp;
       rulT.style.backgroundImage = `repeating-linear-gradient(90deg, rgba(244,241,234,.45) 0 1px, transparent 1px ${stp}px)`; rulT.style.backgroundPosition = `${r.left}px 100%`;
       rulL.style.backgroundImage = `repeating-linear-gradient(180deg, rgba(244,241,234,.45) 0 1px, transparent 1px ${stp}px)`; rulL.style.backgroundPosition = `100% ${r.top}px`;
     }
     if (!sec || !G || !on) return;
-    const r = sec.getBoundingClientRect(), rp = remPx();
+    const r = sec.getBoundingClientRect(), rp = remPx(sec);
     (G.x || []).forEach((x, i) => guideL.insertAdjacentHTML('beforeend', `<i class="gx" data-gx="${i}" style="left:${r.left + x * rp}px"><b>${r2(x)}</b></i>`));
     (G.y || []).forEach((y, i) => guideL.insertAdjacentHTML('beforeend', `<i class="gy" data-gy="${i}" style="top:${r.top + y * rp}px"><b>${r2(y)}</b></i>`));
   }
@@ -2017,7 +2101,7 @@ ${JSON.stringify(ch.map(x => x[1]))}`;
     rulersOn = true; z.setPointerCapture && z.setPointerCapture(e.pointerId);
   }, true));
   addEventListener('pointermove', e => {
-    if (!gDrag) return; const sec = document.getElementById(gDrag.sec), r = sec.getBoundingClientRect(), rp = remPx();
+    if (!gDrag) return; const sec = document.getElementById(gDrag.sec), r = sec.getBoundingClientRect(), rp = remPx(sec);
     const v = gDrag.ax === 'x' ? (e.clientX - r.left) / rp : (e.clientY - r.top) / rp; E.guides[gDrag.sec][gDrag.ax][gDrag.i] = Math.round(v * 2) / 2; gDrag.out = gDrag.ax === 'x' ? e.clientX < 22 : e.clientY < 70; guidesDraw();
   }, true);
   addEventListener('pointerup', () => {
@@ -2076,7 +2160,7 @@ ${JSON.stringify(ch.map(x => x[1]))}`;
     openModal(`<h3>Comparer avec « ${esc(p_.label)} »</h3><p class="ed-note">${new Date(p_.at).toLocaleString('fr-FR')} → maintenant · ${D_.length} différence(s)</p>
       <div class="ed-qc ed-diff">${D_.map((d, i) => `<div><i class="d${d[0] === '+' ? 'a' : d[0] === '−' ? 'r' : 'm'}">${d[0]}</i><span>${esc(d[1])}<small>${esc(d[2] || '')}</small></span>${d[3] || d[4] ? `<button data-dv="${i}">Voir</button>` : ''}</div>`).join('') || '<p class="ed-note">Aucune différence.</p>'}</div>
       <div class="ed-row"><button data-m="close">Fermer</button><button id="ed-df-r">Restaurer cette version</button></div>`, true);
-    document.getElementById('ed-mbody').onclick = e => { const b = e.target.closest('[data-dv]'); if (!b) return; const d = D_[+b.dataset.dv], el = d[3] ? addEl(d[3]) : byPath(d[4]); closeModal(); if (el) { el.scrollIntoView({ block: 'center' }); setTimeout(() => select(el), 300); } };
+    document.getElementById('ed-mbody').onclick = e => { const b = e.target.closest('[data-dv]'); if (!b) return; const d = D_[+b.dataset.dv], el = d[3] ? addEl(d[3]) : byPath(d[4]); closeModal(); if (el) { NAV.reveal(el, { block: 'center' }); setTimeout(() => select(el), 300); } };
     document.getElementById('ed-df-r').onclick = () => { snapshot(); E = norm(JSON.parse(p_.e)); closeModal(); changed('Version restaurée : pensez à enregistrer'); };
   }
 
@@ -2198,8 +2282,8 @@ ${JSON.stringify(ch.map(x => x[1]))}`;
     const t = e.target.closest && e.target.closest('.ed-add[data-act]'); if (!t) return;
     let A; try { A = JSON.parse(t.dataset.act); } catch (er) { return; }
     if (A.t === 'replay') replayEl(addEl(A.target));
-    else if (A.t === 'goto' && A.target) { const s_ = document.getElementById(A.target); if (s_) s_.scrollIntoView({ behavior: 'smooth' }); }
-    else if (A.t === 'next') { const o = visOrder(), i = o.indexOf((sectionOf(t) || {}).id); const s_ = document.getElementById(o[Math.min(o.length - 1, i + 1)]); if (s_) s_.scrollIntoView({ behavior: 'smooth' }); }
+    else if (A.t === 'goto' && A.target) { const s_ = document.getElementById(A.target); if (s_) NAV.reveal(s_, { behavior: 'smooth' }); }
+    else if (A.t === 'next') { const o = visOrder(), i = o.indexOf((sectionOf(t) || {}).id); const s_ = document.getElementById(o[Math.min(o.length - 1, i + 1)]); if (s_) NAV.reveal(s_, { behavior: 'smooth' }); }
     else if (A.t === 'lightbox') { const im = t.querySelector('img'), bg = getComputedStyle(t).backgroundImage.match(/url\("?(.*?)"?\)/); const src = im ? im.src : bg && bg[1]; const box_ = lbL.querySelector('.ed-lbc'); box_.innerHTML = ''; if (src && t.classList.contains('ed-image')) { lbL.querySelector('img').src = src; lbL.querySelector('img').hidden = false; } else { lbL.querySelector('img').hidden = true; const r = t.getBoundingClientRect(), k = Math.min(innerWidth * .9 / r.width, innerHeight * .86 / r.height, 3), c = t.cloneNode(true); ['data-act', 'data-add-id', 'data-scr', 'data-mpx'].forEach(x => c.removeAttribute(x)); Object.assign(c.style, { position: 'relative', left: 'auto', top: 'auto', translate: 'none', rotate: '0deg', width: r.width + 'px', height: r.height + 'px', transform: `scale(${k})`, transformOrigin: '50% 50%', margin: `${r.height * (k - 1) / 2}px ${r.width * (k - 1) / 2}px` }); c.classList.add('ed-in'); box_.appendChild(c); } lbL.hidden = false; }
     else if (A.t === 'sparkle') sparkle(e.clientX, e.clientY);
     else if (A.t === 'flipself') { const f_ = t.querySelector('.ed-flip'); if (f_) f_.classList.toggle('fl'); }
@@ -2240,7 +2324,7 @@ ${JSON.stringify(ch.map(x => x[1]))}`;
   addEventListener('pointermove', e => { if (curR.hidden) return; cx_ = e.clientX; cy_ = e.clientY; const h = e.target.closest && e.target.closest('a, button, [data-go], .ed-clk, [data-act], [data-t], .ed-flip, summary, [data-tb], .tile'); curR.classList.toggle('big', !!h); if (!curRaf) curRaf = requestAnimationFrame(curLoop); }, { passive: true });
   let smT = null, smCur = 0, smRaf = 0;
   addEventListener('wheel', e => {
-    if (on || presenting || !E.set || !E.set.smooth || e.ctrlKey || Math.abs(e.deltaX) > Math.abs(e.deltaY) || (e.target.closest && e.target.closest('[data-ed-ui], .ed-acc, .ed-tbp, textarea'))) return;
+    if (on || presenting || !E.set || !E.set.smooth || NAV.mode() !== 'vertical' || e.ctrlKey || Math.abs(e.deltaX) > Math.abs(e.deltaY) || (e.target.closest && e.target.closest('[data-ed-ui], .ed-acc, .ed-tbp, textarea'))) return;
     e.preventDefault(); if (smT === null) { smT = scrollY; smCur = scrollY; }
     smT = Math.max(0, Math.min(document.documentElement.scrollHeight - innerHeight, smT + e.deltaY * (e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? innerHeight : 1)));
     if (!smRaf) { const st_ = () => { smCur += (smT - smCur) * .11; if (Math.abs(smT - smCur) < .5) { smCur = smT; scrollTo(0, smCur); smRaf = 0; smT = null; return; } scrollTo(0, smCur); smRaf = requestAnimationFrame(st_); }; smRaf = requestAnimationFrame(st_); }
@@ -2280,7 +2364,7 @@ ${JSON.stringify(ch.map(x => x[1]))}`;
   const burstIO = 'IntersectionObserver' in window ? new IntersectionObserver(es => es.forEach(e => { if (!e.isIntersecting || on || e.target.dataset.burst) return; const b_ = (E.bg[e.target.id] || {}).burst; if (!b_) return; e.target.dataset.burst = 1; const r = e.target.getBoundingClientRect(); if (b_ === 'stars') { sparkle(innerWidth * .3, Math.max(80, r.top + 120)); setTimeout(() => sparkle(innerWidth * .7, Math.max(80, r.top + 160)), 250); setTimeout(() => sparkle(innerWidth * .5, Math.max(80, r.top + 90)), 500); } else confetti(innerWidth / 2, Math.max(-20, r.top - 20)); }), { threshold: .5 }) : null;
   const navL = H(`<div id="ed-nav" data-ed-ui hidden><button data-nv="-1" aria-label="Page précédente">‹</button><button data-nv="1" aria-label="Page suivante">›</button></div>`), crumbL = H(`<div id="ed-crumb" data-ed-ui hidden></div>`);
   document.body.append(navL, crumbL);
-  navL.addEventListener('click', e => { const b_ = e.target.closest('[data-nv]'); if (!b_) return; const o = visOrder(), cur_ = (curSection() || {}).id, i = Math.max(0, o.indexOf(cur_)); const s_ = document.getElementById(o[Math.max(0, Math.min(o.length - 1, i + +b_.dataset.nv))]); if (s_) s_.scrollIntoView({ behavior: 'smooth' }); });
+  navL.addEventListener('click', e => { const b_ = e.target.closest('[data-nv]'); if (!b_) return; const o = visOrder(), cur_ = (curSection() || {}).id, i = Math.max(0, o.indexOf(cur_)); const s_ = document.getElementById(o[Math.max(0, Math.min(o.length - 1, i + +b_.dataset.nv))]); if (s_) NAV.reveal(s_, { behavior: 'smooth' }); });
   function crumbUpd() { if (crumbL.hidden) return; const o = visOrder(), s_ = curSection(); if (!s_) return; crumbL.innerHTML = `<b>${o.indexOf(s_.id) + 1}</b> / ${o.length} · ${esc(pageName(s_.id))}`; }
   addEventListener('scroll', () => { if (!crumbL.hidden) requestAnimationFrame(crumbUpd); }, { passive: true });
   function readerNav() { const S_ = E.set || {}; navL.hidden = on || presenting || !S_.navbtn; crumbL.hidden = on || presenting || !S_.crumb; crumbUpd(); }
@@ -2545,7 +2629,7 @@ ${JSON.stringify(ch.map(x => x[1]))}`;
       <div class="ed-row"><button class="pri" data-m="close">Fermer</button></div>`, true);
     document.getElementById('ed-mbody').onclick = e => {
       const b = e.target.closest('button'); if (!b) return; const d = b.dataset;
-      if (d.ig != null) { closeModal(); L[+d.ig].el.scrollIntoView({ block: 'center' }); }
+      if (d.ig != null) { closeModal(); NAV.reveal(L[+d.ig].el, { block: 'center' }); }
       if (d.ip != null) chartExport(L[+d.ip], 'png');
       if (d.is != null) chartExport(L[+d.is], 'svg');
     };
@@ -2713,8 +2797,8 @@ ${JSON.stringify(ch.map((u, i) => ({ i, h: u.h })))}`, { modelTier: 'default' })
     openModal(`<h3>Mode kiosque</h3><p class="ed-note">Le rapport défile seul, écran par écran, puis recommence. Idéal sur un écran d’accueil. Un clic ou une touche arrête le défilement.</p>
       <label class="ed-f">Secondes par écran <input type="number" id="ed-kis" min="3" value="8"></label>
       <div class="ed-row"><button data-m="close">Annuler</button><button class="pri" id="ed-kgo">Lancer</button></div>`);
-    document.getElementById('ed-kgo').onclick = () => { const sec_ = Math.max(3, +document.getElementById('ed-kis').value || 8); closeModal(); setPreview(true); scrollTo(0, 0); document.body.classList.add('ed-kiosk'); pbar.querySelector('span').textContent = 'Mode kiosque'; document.documentElement.requestFullscreen?.().catch(() => { });
-      kioskT = setInterval(() => { const max = document.documentElement.scrollHeight - innerHeight; if (scrollY >= max - 4) scrollTo({ top: 0, behavior: 'auto' }); else scrollTo({ top: Math.min(max, scrollY + innerHeight), behavior: 'smooth' }); }, sec_ * 1000);
+    document.getElementById('ed-kgo').onclick = () => { const sec_ = Math.max(3, +document.getElementById('ed-kis').value || 8); closeModal(); setPreview(true); if (NAV.mode() === 'vertical' && !NAV.fmt()) scrollTo(0, 0); else NAV.go(NAV.first(), false); document.body.classList.add('ed-kiosk'); pbar.querySelector('span').textContent = 'Mode kiosque'; document.documentElement.requestFullscreen?.().catch(() => { });
+      kioskT = setInterval(() => { if (NAV.mode() !== 'vertical' || NAV.fmt()) { const o = visOrder(), c = (NAV.current() || {}).id; if (o.indexOf(c) >= o.length - 1) NAV.go(o[0], false); else NAV.next(); return; } const max = document.documentElement.scrollHeight - innerHeight; if (scrollY >= max - 4) scrollTo({ top: 0, behavior: 'auto' }); else scrollTo({ top: Math.min(max, scrollY + innerHeight), behavior: 'smooth' }); }, sec_ * 1000);
       setTimeout(() => { addEventListener('keydown', kioskStop, { once: true, capture: true }); addEventListener('pointerdown', kioskStop, { once: true, capture: true }); }, 400); };
   }
   function kioskStop() { if (!kioskT) return; clearInterval(kioskT); kioskT = null; document.body.classList.remove('ed-kiosk'); pbar.querySelector('span').textContent = 'Aperçu lecteur'; if (document.fullscreenElement) document.exitFullscreen?.(); status('Mode kiosque arrêté', 'ok'); }
@@ -2779,7 +2863,7 @@ ${JSON.stringify(ch.map((u, i) => ({ i, h: u.h })))}`, { modelTier: 'default' })
   addEventListener('keydown', e => { if (e.key === 'Escape' && !helpP.hidden) { helpP.hidden = true; e.stopPropagation(); } }, true);
   document.getElementById('ed-helpb').addEventListener('click', helpOpen);
   document.getElementById('ed-moodsw').addEventListener('click', () => { readerMood = document.documentElement.dataset.mood === 'ivoire' ? 'nuit' : 'ivoire'; try { localStorage.setItem('lvmh-mood', readerMood); } catch (e) { } applyAll(); });
-  document.getElementById('ed-path-s').addEventListener('change', e => { pathSel = e.target.value; try { localStorage.setItem('lvmh-path', pathSel); } catch (er) { } applyAll(); scrollTo(0, 0); });
+  document.getElementById('ed-path-s').addEventListener('change', e => { pathSel = e.target.value; try { localStorage.setItem('lvmh-path', pathSel); } catch (er) { } applyAll(); if (NAV.mode() === 'vertical' && !NAV.fmt()) scrollTo(0, 0); else NAV.go(NAV.first(), false); });
   let speaking = false;
   document.getElementById('ed-listen').addEventListener('click', () => {
     const b = document.getElementById('ed-listen');
@@ -2850,6 +2934,8 @@ ${JSON.stringify(ch.map((u, i) => ({ i, h: u.h })))}`, { modelTier: 'default' })
     document.body.classList.toggle('ed-norail', !!S.norail && !on);
     document.body.classList.toggle('ed-nobrand', !!S.nobrand && !on);
     document.body.classList.toggle('ed-nocopy', !!S.nocopy && !on);
+    if (NAV.fmt() !== (S.fmt || '')) NAV.setFmt(S.fmt || '');
+    ['slide', 'zoom', 'none'].forEach(k => document.documentElement.classList.toggle('ed-sfx-' + k, (S.fmtfx || 'fade') === k));
     if (window.__v5mx) window.__v5mx.setFilters(!!S.mxf && !on);
     if (window.__v5perc) window.__v5perc.setOpts({ hist: !!S.phist });
     if (window.__v5topics) window.__v5topics.setOpts({ share: !!S.tshare });
@@ -2860,7 +2946,8 @@ ${JSON.stringify(ch.map((u, i) => ({ i, h: u.h })))}`, { modelTier: 'default' })
     imgButtons();
     progUpd();
   }
-  function progUpd() { if (progB.hidden) return; const h = document.documentElement.scrollHeight - innerHeight; progB.firstChild.style.width = (h > 0 ? scrollY / h * 100 : 0) + '%'; }
+  function progUpd() { if (progB.hidden) return; progB.firstChild.style.width = NAV.progress() * 100 + '%'; }
+  addEventListener('ed-page', () => { progUpd(); if (typeof crumbUpd === 'function') crumbUpd(); if (presenting) presenterNotes(); if (room) sendPlace(); });
   addEventListener('scroll', progUpd, { passive: true });
   addEventListener('contextmenu', e => { if (!on && E.set && E.set.nocopy && app.contains(e.target)) e.preventDefault(); });
   addEventListener('copy', e => { if (!on && E.set && E.set.nocopy) e.preventDefault(); });
@@ -2873,6 +2960,10 @@ ${JSON.stringify(ch.map((u, i) => ({ i, h: u.h })))}`, { modelTier: 'default' })
       <label class="ed-f">Filigrane (vide = aucun) <input id="es-wm" value="${esc(S.wm || '')}" placeholder="CONFIDENTIEL · ${CLIENT}"></label>
       <label class="ed-f">Intensité du filigrane <input type="range" id="es-wmo" min=".03" max=".2" step=".01" value="${S.wmo || .06}"></label>
       <label class="ed-f ck"><input type="checkbox" id="es-nocopy" ${S.nocopy ? 'checked' : ''}> <span><b>Limiter la copie</b> : sélection de texte, copier et clic droit désactivés (dissuasif, pas une vraie protection)</span></label>
+      <h6 class="ed-mh">Format de lecture</h6>
+      <label class="ed-f">Format <select id="es-fmt" ${NAV.fixed() ? 'disabled title="Deck à taille fixe : il garde sa propre présentation"' : ''}><option value="">Format du deck (détecté : ${({ vertical: 'défilement vertical', horizontal: 'défilement horizontal', slides: 'diapositives' })[NAV.fmt() ? '' : NAV.mode()] || 'selon le deck'})</option><option value="v" ${S.fmt === 'v' ? 'selected' : ''}>Défilement vertical (pages empilées)</option><option value="h" ${S.fmt === 'h' ? 'selected' : ''}>Défilement horizontal (pages côte à côte)</option><option value="s" ${S.fmt === 's' ? 'selected' : ''}>Diapositives (une page à la fois)</option></select></label>
+      <label class="ed-f">Transition entre diapositives <select id="es-fmtfx">${[['fade', 'Fondu'], ['slide', 'Glissement'], ['zoom', 'Zoom'], ['none', 'Aucune']].map(([v, l]) => `<option value="${v}" ${(S.fmtfx || 'fade') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+      <p class="ed-note">${NAV.fixed() ? 'Deck à taille fixe (scène mise à l’échelle, Reveal.js…) : il garde sa propre navigation ; l’éditeur s’y adapte.' : 'Horizontal et diapositives : flèches, molette, glisser au doigt. Les sections animées au défilement (récit au scroll) restent prévues pour le format vertical.'}</p>
       <h6 class="ed-mh">Mouvement et transitions</h6>
       <label class="ed-f ck"><input type="checkbox" id="es-intro" ${S.intro ? 'checked' : ''}> <span><b>Écran d’introduction</b> animé à l’ouverture (une fois par visite)</span></label><input id="es-introT" value="${esc(S.introT || '')}" placeholder="Texte de l’introduction : Rapport e-réputation" style="width:100%;margin:-4px 0 8px">
       <label class="ed-f ck"><input type="checkbox" id="es-smooth" ${S.smooth ? 'checked' : ''}> <span><b>Défilement fluide</b> à la molette (inertie douce)</span></label>
@@ -2918,7 +3009,7 @@ ${JSON.stringify(ch.map((u, i) => ({ i, h: u.h })))}`, { modelTier: 'default' })
       try { localStorage.setItem('lvmh-autosave', g('es-auto').checked ? '1' : ''); } catch (e) { }
       E.curve = Object.assign({}, E.curve, { ctrl: g('es-cctl').checked || undefined });
       const hb = [...document.querySelectorAll('[data-br]')].filter(x => !x.checked).map(x => x.dataset.br);
-      E.set = { tshare: g('es-tshare').checked || undefined, help: g('es-help').checked || undefined, phist: g('es-phist').checked || undefined, ehist: g('es-ehist').checked || undefined, rfil: g('es-rfil').checked || undefined, concx: g('es-concx').checked || undefined, bcmp: g('es-bcmp').checked || undefined, hideBr: hb.length ? hb : undefined, img: g('es-img').checked || undefined, mxf: g('es-mxf').checked || undefined, progress: g('es-progress').checked || undefined, search: g('es-search').checked ? undefined : false, wm: g('es-wm').value.trim() || undefined, wmo: +g('es-wmo').value, nocopy: g('es-nocopy').checked || undefined, norail: g('es-norail').checked || undefined, nobrand: g('es-nobrand').checked || undefined, listen: g('es-listen').checked || undefined, vcolor: g('es-vcolor').checked || undefined, typo: g('es-typo').checked || undefined, ask: g('es-ask').checked || undefined, gloss: E.set.gloss, csv: g('es-csv').checked || undefined, lockok: g('es-lockok').checked || undefined, intro: g('es-intro').checked || undefined, introT: g('es-introT').value.trim() || undefined, smooth: g('es-smooth').checked || undefined, snap: g('es-snap').checked || undefined, cursor: g('es-cursor').checked || undefined, noanim: g('es-noanim').checked || undefined, navbtn: g('es-navbtn').checked || undefined, crumb: g('es-crumb').checked || undefined, moodsw: g('es-moodsw').checked || undefined, cite: g('es-cite').checked || undefined };
+      E.set = { fmt: g('es-fmt').value || undefined, fmtfx: g('es-fmtfx').value === 'fade' ? undefined : g('es-fmtfx').value, tshare: g('es-tshare').checked || undefined, help: g('es-help').checked || undefined, phist: g('es-phist').checked || undefined, ehist: g('es-ehist').checked || undefined, rfil: g('es-rfil').checked || undefined, concx: g('es-concx').checked || undefined, bcmp: g('es-bcmp').checked || undefined, hideBr: hb.length ? hb : undefined, img: g('es-img').checked || undefined, mxf: g('es-mxf').checked || undefined, progress: g('es-progress').checked || undefined, search: g('es-search').checked ? undefined : false, wm: g('es-wm').value.trim() || undefined, wmo: +g('es-wmo').value, nocopy: g('es-nocopy').checked || undefined, norail: g('es-norail').checked || undefined, nobrand: g('es-nobrand').checked || undefined, listen: g('es-listen').checked || undefined, vcolor: g('es-vcolor').checked || undefined, typo: g('es-typo').checked || undefined, ask: g('es-ask').checked || undefined, gloss: E.set.gloss, csv: g('es-csv').checked || undefined, lockok: g('es-lockok').checked || undefined, intro: g('es-intro').checked || undefined, introT: g('es-introT').value.trim() || undefined, smooth: g('es-smooth').checked || undefined, snap: g('es-snap').checked || undefined, cursor: g('es-cursor').checked || undefined, noanim: g('es-noanim').checked || undefined, navbtn: g('es-navbtn').checked || undefined, crumb: g('es-crumb').checked || undefined, moodsw: g('es-moodsw').checked || undefined, cite: g('es-cite').checked || undefined };
       closeModal(); changed('Réglages appliqués : visibles en aperçu et pour les lecteurs');
     };
   }
@@ -2932,7 +3023,7 @@ ${JSON.stringify(ch.map((u, i) => ({ i, h: u.h })))}`, { modelTier: 'default' })
   const cmdClose = () => { cmdBox.hidden = true; };
   function cmdList(q) {
     const nq = q.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''), m = l => l.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').includes(nq);
-    const goto = id => () => document.getElementById(id).scrollIntoView({ behavior: 'smooth' });
+    const goto = id => () => NAV.reveal(document.getElementById(id), { behavior: 'smooth' });
     let it = visOrder().map((id, i) => ({ g: 'Pages', l: `${i + 1}. ${pageName(id)}`, f: goto(id) }));
     if (on) {
       const acts = [['Enregistrer', 'save'], ['Aperçu lecteur', 'preview'], ['Présenter', 'present'], ['Contrôle qualité', 'qc'], ['Version anglaise', 'translate'], ['Mes blocs', 'lib'], ['Importer un autre mois', 'import'], ['Réglages du rapport', 'settings'], ['Parcours de lecture', 'paths'], ['Préparer le rapport du mois', 'month'], ['E-mail d’envoi', 'mail'], ['Exporter en PowerPoint / PDF', 'deck'], ['Alertes et seuils', 'alertsbox'], ['Annotations de la courbe (pics, événements)', 'peaks'], ['Image de la courbe (PNG)', 'curveimg'], ['Images des graphiques (PNG, SVG)', 'images'], ['Exporter l’historique (CSV)', 'histcsv'], ['Remplacer une couleur partout', 'recolor'], ['Alléger le rapport', 'slim'], ['Informations du document', 'docinfo'], ['Glossaire', 'gloss'], ['Vue d’ensemble', 'overview'], ['Variables personnalisées', 'vars'], ['Règles et repères', 'rulers'], ['Grille de colonnes', 'cols'], ['Aperçu mobile / tablette', 'device'], ['Relecture IA', 'proof'], ['Typographie française', 'typo'], ['Mode kiosque', 'kiosk'], ['Exporter les textes', 'texts'], ['Page Focus sujet', 'focuspage'], ['Suivi des modifications', 'track'], ['Charte (styles et ambiance)', 'charte'], ['Couleurs du document', 'theme'], ['Historique', 'history'], ['Rechercher et remplacer', 'find'], ['Grille magnétique', 'grid'], ['Pages et calques', 'left'], ['Annuler', 'undo'], ['Rétablir', 'redo'], ['Raccourcis', 'help']];
@@ -2944,7 +3035,7 @@ ${JSON.stringify(ch.map((u, i) => ({ i, h: u.h })))}`, { modelTier: 'default' })
     let res = q ? it.filter(x => m(x.l)) : it.filter(x => x.g !== 'Ajouter' || x.l.includes('(Texte)'));
     if (q.length >= 3) {
       const hits = [], w = document.createTreeWalker(app, NodeFilter.SHOW_TEXT); let n;
-      while ((n = w.nextNode()) && hits.length < 12) { const v = n.nodeValue; if (!v.trim() || n.parentElement.closest('svg, script, style, .ed-sec-hidden, .ed-memo')) continue; const vv = v.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''), i = vv.indexOf(nq); if (i < 0) continue; const sec = sectionOf(n.parentElement); if (!sec) continue; const el = n.parentElement; hits.push({ g: 'Dans le rapport', l: (i > 30 ? '…' : '') + v.slice(Math.max(0, i - 30), i + nq.length + 50).trim(), sub: pageName(sec.id), f: () => { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.add('ed-flash'); setTimeout(() => el.classList.remove('ed-flash'), 1800); } }); }
+      while ((n = w.nextNode()) && hits.length < 12) { const v = n.nodeValue; if (!v.trim() || n.parentElement.closest('svg, script, style, .ed-sec-hidden, .ed-memo')) continue; const vv = v.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''), i = vv.indexOf(nq); if (i < 0) continue; const sec = sectionOf(n.parentElement); if (!sec) continue; const el = n.parentElement; hits.push({ g: 'Dans le rapport', l: (i > 30 ? '…' : '') + v.slice(Math.max(0, i - 30), i + nq.length + 50).trim(), sub: pageName(sec.id), f: () => { NAV.reveal(el, { behavior: 'smooth', block: 'center' }); el.classList.add('ed-flash'); setTimeout(() => el.classList.remove('ed-flash'), 1800); } }); }
       res = res.concat(hits);
     }
     cmdItems = res.slice(0, 60); cmdIx = 0; cmdDraw();
@@ -2990,19 +3081,19 @@ ${JSON.stringify(ch.map((u, i) => ({ i, h: u.h })))}`, { modelTier: 'default' })
       note('Chargement des outils d’export…');
       const lib = await (h2i = h2i || loadLib('https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js', 'htmlToImage').catch(e => { h2i = null; throw e; }));
       const out = kind === 'pptx' ? await loadLib('https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js', 'PptxGenJS') : (await loadLib('https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js', 'jspdf')).jsPDF;
-      let ids = (skipH ? visOrder() : orderNow()); const W = innerWidth, Hh = innerHeight, y0 = scrollY;
+      let ids = (skipH ? visOrder() : orderNow()); const W = innerWidth, Hh = innerHeight, y0 = scrollY, c0 = NAV.current();
       const mbox = modal.querySelector('.ed-mbox'); mbox.style.visibility = 'hidden';
       const wasOn = on; if (on) { if (editing) stopText(); select(null); on = false; document.body.classList.remove('admin', 'ed-on'); [bar, insp, left].forEach(x => x.hidden = true); applyAll(); }
-      document.body.classList.add('ed-shot'); const shots = []; ids = ids.filter(id => { const s_ = document.getElementById(id); return s_ && s_.offsetHeight > 0 && getComputedStyle(s_).display !== 'none'; });
+      document.body.classList.add('ed-shot'); const shots = []; ids = ids.filter(id => { const s_ = document.getElementById(id); return s_ && (NAV.mode() === 'slides' || (s_.offsetHeight > 0 && getComputedStyle(s_).display !== 'none')); });
       for (let i = 0; i < ids.length; i++) {
-        const sec = document.getElementById(ids[i]); scrollTo({ top: sec.getBoundingClientRect().top + scrollY, behavior: 'auto' });
+        const sec = document.getElementById(ids[i]); if (NAV.mode() === 'vertical') scrollTo({ top: sec.getBoundingClientRect().top + scrollY, behavior: 'auto' }); else NAV.go(sec, false);
         await new Promise(r => setTimeout(r, 900));
         const bgc = getComputedStyle(document.body).backgroundColor;
         shots.push(await lib.toJpeg(sec, { quality: .92, pixelRatio: q, width: W, height: Math.min(sec.offsetHeight, Hh), backgroundColor: bgc, filter: n => !(n.dataset && n.dataset.edUi !== undefined) }));
         g('ed-dk-p').firstChild.style.width = (i + 1) / ids.length * 100 + '%'; note(`Page ${i + 1} / ${ids.length} : ${pageNameFr(ids[i])}`);
       }
       document.body.classList.remove('ed-shot'); mbox.style.visibility = '';
-      if (wasOn) enter(); scrollTo({ top: y0, behavior: 'auto' });
+      if (wasOn) enter(); if (NAV.mode() === 'vertical') scrollTo({ top: y0, behavior: 'auto' }); else if (c0) NAV.go(c0, false);
       note('Assemblage du fichier…'); let blob;
       if (kind === 'pptx') {
         const P = new out(); P.defineLayout({ name: CLIENT, width: 10, height: +(10 * Hh / W).toFixed(3) }); P.layout = CLIENT; P.title = `Rapport e-réputation ${CLIENT} · ${TOKMAP.mois}`; P.company = 'Licter';
@@ -3028,7 +3119,7 @@ ${JSON.stringify(ch.map((u, i) => ({ i, h: u.h })))}`, { modelTier: 'default' })
     try {
       const lib = await h2i, wasSel = sels.slice(); select(null);
       document.body.classList.add('ed-shot');
-      sec.scrollIntoView(); await new Promise(r => setTimeout(r, 400));
+      NAV.reveal(sec); await new Promise(r => setTimeout(r, 400));
       const H_ = Math.min(sec.offsetHeight, innerHeight), bgc = getComputedStyle(document.body).backgroundColor;
       const blob = await lib.toBlob(sec, { pixelRatio: 2, height: H_, width: sec.offsetWidth, backgroundColor: bgc, cacheBust: false, filter: n => !(n.dataset && n.dataset.edUi !== undefined) });
       document.body.classList.remove('ed-shot'); sels = wasSel; paint();
@@ -3098,7 +3189,7 @@ Réponds uniquement avec un objet JSON : {"title": "<titre-insight, 10 mots max>
     const count = () => { const r = rx(); if (!r) { info.textContent = ''; return []; } const hits = nodes().filter(n => { r.lastIndex = 0; return r.test(n.nodeValue); }); const addHits = E.add.filter(a => { r.lastIndex = 0; return r.test(JSON.stringify([a.html, a.table, a.post, a.w_, a.chart && a.chart.title])); }); info.textContent = `${hits.length + addHits.length} occurrence(s) trouvée(s)`; return hits; };
     q.oninput = count; cs.onchange = count; q.focus();
     let ix = 0;
-    document.getElementById('ed-fnext').onclick = () => { const hits = count(); if (!hits.length) return; const n = hits[ix++ % hits.length]; const el = selectable(n.parentElement); closeModal(); if (el) { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); setTimeout(() => select(el), 400); } };
+    document.getElementById('ed-fnext').onclick = () => { const hits = count(); if (!hits.length) return; const n = hits[ix++ % hits.length]; const el = selectable(n.parentElement); closeModal(); if (el) { NAV.reveal(el, { block: 'center', behavior: 'smooth' }); setTimeout(() => select(el), 400); } };
     document.getElementById('ed-fall').onclick = () => {
       const r = rx(); if (!r) return; snapshot(); let c = 0;
       const touched = new Set(), hits = nodes().filter(n => { r.lastIndex = 0; return r.test(n.nodeValue); });
@@ -3504,7 +3595,7 @@ Réponds uniquement avec un objet JSON : {"title": "<titre-insight, 10 mots max>
     if (t.id === 'ei-notes') return status(mode === 'artifact' ? 'Notes modifiées : pensez à enregistrer' : 'Notes gardées dans ce navigateur', 'warn');
     if (t.id === 'ei-bgc' && sec) { snapshot(); E.bg[sec.id] = Object.assign({}, E.bg[sec.id], { color: t.value, grad: '' }); return changed(); }
     if (t.id === 'ei-grad' && sec) { snapshot(); E.bg[sec.id] = Object.assign({}, E.bg[sec.id], { grad: t.value }); return changed(); }
-    if (t.id === 'ei-sendto' && t.value) { const to = t.value; snapshot(); const items = sels.filter(isAdd).map(addOf); items.forEach(a_ => { a_.sec = to; a_.parent = to; a_.pin = undefined; }); changed(`${items.length} élément(s) envoyé(s) vers « ${pageNameFr(to)} »`); document.getElementById(to).scrollIntoView(); sels = items.map(a_ => addEl(a_.id)).filter(Boolean); paint(); inspect(); return; }
+    if (t.id === 'ei-sendto' && t.value) { const to = t.value; snapshot(); const items = sels.filter(isAdd).map(addOf); items.forEach(a_ => { a_.sec = to; a_.parent = to; a_.pin = undefined; }); changed(`${items.length} élément(s) envoyé(s) vers « ${pageNameFr(to)} »`); NAV.reveal(document.getElementById(to)); sels = items.map(a_ => addEl(a_.id)).filter(Boolean); paint(); inspect(); return; }
     if (t.dataset.tk != null && sec) { snapshot(); E.tasks[sec.id][+t.dataset.tk].done = t.checked || undefined; return changed(t.checked ? 'Tâche faite' : ''); }
     if (t.id === 'ei-dur' && sec) { snapshot(); const v_ = parseFloat(String(t.value).replace(',', '.')); if (v_ > 0) E.dur[sec.id] = v_; else delete E.dur[sec.id]; const tot = Object.values(E.dur).reduce((a, x) => a + x, 0); return changed(`Durée totale prévue : ${nfr(tot, 1)} min`); }
     if (t.id === 'ei-pinpage' && sec) { const pg_ = E.pages.find(p_ => p_.id === sec.id); if (!pg_) return; snapshot(); pg_.pin = t.checked || undefined; if (t.checked && (pg_.h || 100) < 200) pg_.h = 300; return changed(t.checked ? 'Page épinglée sur 3 écrans : réglez « Apparaît à … % » sur chaque élément' : ''); }
@@ -3564,7 +3655,7 @@ Réponds uniquement avec un objet JSON : {"title": "<titre-insight, 10 mots max>
     if (t.id === 'ei-reveal') { snapshot(); a.reveal = t.checked || undefined; return changed(); }
     if (t.id === 'ei-pinskip') { snapshot(); a.pinSkip = t.checked || undefined; return changed(); }
     if (t.id === 'ei-pin') {
-      snapshot(); const r = s.getBoundingClientRect(), rp = remPx();
+      snapshot(); const r = s.getBoundingClientRect(), rp = remPx(s);
       if (t.checked) { Object.assign(a, { pin: true, u: 'rem', x: r2(r.left / rp), y: r2(r.top / rp) }); }
       else { const sec_ = curSection() || document.getElementById(a.sec); const sr = sec_.getBoundingClientRect(); Object.assign(a, { pin: undefined, pinSkip: undefined, sec: sec_.id, parent: sec_.id, u: 'rem', x: r2((r.left - sr.left) / rp), y: r2((r.top - sr.top) / rp) }); }
       return changed(t.checked ? 'Épinglé : visible sur toutes les pages' : 'Désépinglé : posé sur la page affichée');
@@ -3659,7 +3750,7 @@ Réponds uniquement avec un objet JSON : {"title": "<titre-insight, 10 mots max>
     if (!clip || !clip.items || !clip.items.length) return;
     const parent = container(); if (!parent) return;
     snapshot();
-    const u = parent.closest('.mx5 .box') ? 'px' : 'rem';
+    const u = boxOf(parent) ? 'px' : 'rem';
     const items = regroup(clip.items.map(it => { const c = JSON.parse(JSON.stringify(it)); c.id = uid(); c.sec = sectionOf(parent).id; c.parent = pathOf(parent) || c.sec; if (c.u !== u) { const k = u === 'px' ? 10 : .1; c.x *= k; c.y *= k; if (c.w) c.w *= k; if (c.h) c.h *= k; c.u = u; } c.x += 3; c.y += 3; return c; }));
     items.forEach(c => E.add.push(c));
     changed('Collé'); sels = items.map(c => addEl(c.id)).filter(Boolean); inspect(); paint();
@@ -3748,7 +3839,8 @@ Réponds uniquement avec un objet JSON : {"title": "<titre-insight, 10 mots max>
   /* ---------- en direct : suivre le présentateur (capacité « room ») ---------- */
   let liveOn = false, following = null, lastPlace = '', placeT = 0;
   function myPlace() {
-    const cy = innerHeight / 2, sec = [...app.children].find(s_ => { const r = s_.getBoundingClientRect(); return r.top <= cy && r.bottom >= cy && s_.offsetHeight; }); if (!sec) return null;
+    const sec = NAV.current(); if (!sec) return null;
+    if (NAV.mode() !== 'vertical') return { page: sec.id, pos: 0 };
     const r = sec.getBoundingClientRect(); return { page: sec.id, pos: Math.round(Math.max(0, Math.min(1, -r.top / Math.max(1, r.height - innerHeight))) * 1000) / 1000 };
   }
   function sendPlace(force) {
@@ -3760,6 +3852,7 @@ Réponds uniquement avec un objet JSON : {"title": "<titre-insight, 10 mots max>
   function setLive(v) { liveOn = !!v; sendPlace(true); presTool('none'); status(liveOn ? 'En direct : les participants peuvent suivre votre défilement' : 'Diffusion arrêtée', 'ok'); }
   function goPlace(pr) {
     if (!pr || !pr.page) return; const sec = document.getElementById(pr.page); if (!sec) return;
+    if (NAV.mode() !== 'vertical') { if (NAV.current() !== sec) NAV.go(sec); return; }
     const y = sec.getBoundingClientRect().top + scrollY + (pr.pos || 0) * Math.max(0, sec.offsetHeight - innerHeight);
     if (Math.abs(scrollY - y) > 4) scrollTo({ top: y, behavior: Math.abs(scrollY - y) > innerHeight * 2 ? 'auto' : 'smooth' });
   }
@@ -3889,9 +3982,9 @@ Réponds uniquement avec un objet JSON : {"title": "<titre-insight, 10 mots max>
   function snapTargets(el) {
     const sec = sectionOf(el), par = el.parentElement, xs = [], ys = [];
     const pr = par.getBoundingClientRect(); xs.push(pr.left, (pr.left + pr.right) / 2, pr.right); ys.push(Math.max(pr.top, 0), (Math.max(pr.top, 0) + Math.min(pr.bottom, innerHeight)) / 2);
-    if (par === sec) xs.push(pr.left + 6 * remPx(), pr.right - 6 * remPx());
-    if (sec && colsOn) { const sr = sec.getBoundingClientRect(), rp = remPx(), mg = 6 * rp, gw = (sr.width - 2 * mg - 11 * 2 * rp) / 12; for (let i = 0; i < 12; i++) { const x = sr.left + mg + i * (gw + 2 * rp); xs.push(x, x + gw); } }
-    if (sec && E.guides[sec.id]) { const sr = sec.getBoundingClientRect(), rp = remPx(); (E.guides[sec.id].x || []).forEach(x => xs.push(sr.left + x * rp)); (E.guides[sec.id].y || []).forEach(y => ys.push(sr.top + y * rp)); }
+    if (par === sec) xs.push(pr.left + 6 * remPx(sec), pr.right - 6 * remPx(sec));
+    if (sec && colsOn) { const sr = sec.getBoundingClientRect(), rp = remPx(sec), mg = 6 * rp, gw = (sr.width - 2 * mg - 11 * 2 * rp) / 12; for (let i = 0; i < 12; i++) { const x = sr.left + mg + i * (gw + 2 * rp); xs.push(x, x + gw); } }
+    if (sec && E.guides[sec.id]) { const sr = sec.getBoundingClientRect(), rp = remPx(sec); (E.guides[sec.id].x || []).forEach(x => xs.push(sr.left + x * rp)); (E.guides[sec.id].y || []).forEach(y => ys.push(sr.top + y * rp)); }
     if (sec) [...sec.children].flatMap(c => [c, ...c.children]).filter(n => !n.matches('[data-ed-ui], .ed-add, script, style') && !n.contains(el) && !el.contains(n)).slice(0, 120).forEach(n => { const r = n.getBoundingClientRect(); if (r.width < 24 || r.height < 12 || r.bottom < 0 || r.top > innerHeight || r.width > innerWidth * .96) return; xs.push(r.left, r.right); ys.push(r.top, r.bottom); });
     (sec ? sec.querySelectorAll('.ed-add') : []).forEach(n => { if (sels.includes(n)) return; const r = n.getBoundingClientRect(); if (r.bottom < 0 || r.top > innerHeight) return; xs.push(r.left, (r.left + r.right) / 2, r.right); ys.push(r.top, (r.top + r.bottom) / 2, r.bottom); });
     return { xs, ys, par: pr };
@@ -3973,7 +4066,35 @@ Réponds uniquement avec un objet JSON : {"title": "<titre-insight, 10 mots max>
   addEventListener('click', e => { if (on && !e.target.closest('[data-ed-ui]') && (app.contains(e.target) || fixedL.contains(e.target)) && !(editing && editing.contains(e.target))) { e.preventDefault(); e.stopPropagation(); } }, true);
   addEventListener('dblclick', e => { if (!on || e.target.closest('[data-ed-ui]')) return; const t = selectable(e.target); if (t) { e.preventDefault(); startText(t); } }, true);
   addEventListener('paste', e => { if (!editing) return; e.preventDefault(); document.execCommand('insertText', false, (e.clipboardData || window.clipboardData).getData('text/plain')); }, true);
+  /* formats imposés (horizontal, diapositives) : flèches, Page suivante / précédente, Espace, Début / Fin */
+  function navKey(e) {
+    const f = NAV.fmt(); if (!f || f === 'v' || e.ctrlKey || e.metaKey || e.altKey || (e.target.matches && e.target.matches('input, textarea, select, [contenteditable="true"]'))) return false;
+    const fw = ['ArrowRight', 'ArrowDown', 'PageDown', ' '].includes(e.key), bw = ['ArrowLeft', 'ArrowUp', 'PageUp'].includes(e.key);
+    if (e.key === 'Home') { NAV.go(NAV.first()); return true; }
+    if (e.key === 'End') { const o = visOrder(); NAV.go(o[o.length - 1]); return true; }
+    if (!fw && !bw) return false;
+    const sec = NAV.current();
+    if (sec && (e.key === 'ArrowDown' || e.key === 'ArrowUp') && sec.scrollHeight > sec.clientHeight + 4) { const atB = sec.scrollTop + sec.clientHeight >= sec.scrollHeight - 2, atT = sec.scrollTop <= 0; if ((e.key === 'ArrowDown' && !atB) || (e.key === 'ArrowUp' && !atT)) return false; }
+    fw ? NAV.next() : NAV.prev(); return true;
+  }
+  let wheelT = 0, touchX = null, touchY = null;
+  addEventListener('wheel', e => {
+    const f = NAV.fmt(); if (!f || f === 'v' || e.ctrlKey || (e.target.closest && e.target.closest('[data-ed-ui]'))) return;
+    const sec = NAV.current(), dy = e.deltaY;
+    if (Math.abs(e.deltaX) > Math.abs(dy)) return;
+    if (sec && sec.scrollHeight > sec.clientHeight + 4) { const atB = sec.scrollTop + sec.clientHeight >= sec.scrollHeight - 2, atT = sec.scrollTop <= 0; if ((dy > 0 && !atB) || (dy < 0 && !atT)) return; }
+    e.preventDefault(); const now = Date.now(); if (now - wheelT < 700 || Math.abs(dy) < 6) return; wheelT = now; dy > 0 ? NAV.next() : NAV.prev();
+  }, { passive: false });
+  addEventListener('touchstart', e => { if (NAV.fmt() !== 's' || e.touches.length !== 1) return; touchX = e.touches[0].clientX; touchY = e.touches[0].clientY; }, { passive: true });
+  addEventListener('touchend', e => { if (touchX == null) return; const t = e.changedTouches[0], dx = t.clientX - touchX, dy = t.clientY - touchY; touchX = null; if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.3 && !(e.target.closest && e.target.closest('[data-ed-ui]'))) dx < 0 ? NAV.next() : NAV.prev(); }, { passive: true });
+  /* en phase de capture : l'éditeur passe avant la navigation propre du deck (Reveal.js…) dans les formats imposés */
   addEventListener('keydown', e => {
+    if (NAV.busy() || !NAV.fmt() || NAV.fmt() === 'v' || !cmdBox.hidden || !drawC.hidden) return;
+    if (presenting && !e.ctrlKey && !e.metaKey && !e.altKey && stepKey(e)) { e.preventDefault(); e.stopImmediatePropagation(); return; }
+    if ((!on || (!sels.length && !editing)) && navKey(e)) { e.preventDefault(); e.stopImmediatePropagation(); }
+  }, true);
+  addEventListener('keydown', e => {
+    if (NAV.busy()) return;
     if (!drawC.hidden && (e.key === 'Enter' || e.key === 'Escape')) { e.preventDefault(); e.stopImmediatePropagation(); drawEnd(e.key === 'Enter'); return; }
     if (e.key === 'Alt' && on) { altDown = true; measure(); }
     if (!cmdBox.hidden) { cmdKey(e); return; }
@@ -4073,5 +4194,5 @@ Réponds uniquement avec un objet JSON : {"title": "<titre-insight, 10 mots max>
     }
     if (store.sget('lvmh-admin') === '1' && !window.__ED_PREVIEW) enter();
   })();
-  window.__editor5 = { get edits() { return E; }, applyAll, enter: () => enter(), presets, renderChart, tokens: TOKENS };
+  window.__editor5 = { get edits() { return E; }, applyAll, enter: () => enter(), presets, renderChart, tokens: TOKENS, nav: NAV };
 })();

@@ -4,7 +4,7 @@ Dépôt « marketplace » interne. Il contient pour l'instant un plugin :
 
 | Plugin | Contenu |
 |---|---|
-| `licter-decks` | Skill **editeur-deck** : rend n'importe quel deck ou rapport HTML éditable par l'équipe (éditeur admin par code, 46 à 67 blocs, graphiques, animations et transitions, mode présentation, assistant IA, enregistrement dans un artefact claude.ai partagé), avec un deck de départ et un test automatique. |
+| `licter-decks` | Skill **editeur-deck** : rend n'importe quel deck ou rapport HTML éditable par l'équipe (éditeur admin par code, 46 à 67 blocs, graphiques, animations et transitions, mode présentation, assistant IA, enregistrement dans un artefact claude.ai partagé), pour tout format de deck (défilement vertical, horizontal, diapositives, Reveal.js, scène 1920 × 1080), avec un deck de départ et des tests automatiques. |
 
 ## Installer (chaque membre de l'équipe)
 
@@ -40,15 +40,9 @@ Sans Claude, le script s'utilise seul :
 python3 plugins/licter-decks/skills/editeur-deck/scripts/inject.py deck.html --root "#deck" --client "Client" --code "Code2026"
 ```
 
-## Mettre à jour l'éditeur
+## Mises à jour et contributions
 
-La source de l'éditeur est le projet LVMH (`engine/editor.js`, `engine/editor.css`). Après une évolution :
-
-```bash
-python3 pipeline/sync_plugin.py --bump
-```
-
-puis valider (`claude plugin validate --strict plugins/licter-decks`), committer et pousser ce dépôt.
-Chacun reçoit la nouvelle version avec `claude plugin marketplace update licter` puis `claude plugin update licter-decks@licter`
-(ou automatiquement si la mise à jour automatique du marketplace est activée dans `/plugin`).
-Une version non incrémentée n'est pas redistribuée.
+- Recevoir les nouvelles versions : activer la mise à jour automatique (`/plugin` → *Marketplaces* → `licter` →
+  *Enable auto-update*), ou `claude plugin marketplace update licter` puis `claude plugin update licter-decks@licter`.
+- Proposer une modification (accès en écriture au dépôt) : voir [CONTRIBUER.md](CONTRIBUER.md). Toujours incrémenter
+  la version du plugin, sinon personne ne reçoit le changement.

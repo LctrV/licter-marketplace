@@ -1,0 +1,15 @@
+<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Deck diapositives 1920</title><style>
+html,body{margin:0;height:100%;overflow:hidden;background:#111;color:#fff;font-family:system-ui;font-size:16px}
+#stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform-origin:0 0}
+#deck>section{position:absolute;inset:0;padding:120px 160px;box-sizing:border-box;background:#1c2541;display:none}
+#deck>section.active{display:block}
+h2{font-size:96px;margin:0}
+</style></head><body><div id="stage"><main id="deck">
+<section id="s1" class="active"><h2>Diapo 1</h2></section><section id="s2"><h2>Diapo 2</h2></section><section id="s3"><h2>Diapo 3</h2></section><section id="s4"><h2>Diapo 4</h2></section>
+</main></div><script>
+const st=document.getElementById('stage'),S=[...document.querySelectorAll('#deck>section')];let i=0;
+function fit(){const k=Math.min(innerWidth/1920,innerHeight/1080);st.style.transform=`translate(${-960*k}px,${-540*k}px) scale(${k})`;}
+function show(n){i=Math.max(0,Math.min(S.length-1,n));S.forEach((s,j)=>s.classList.toggle('active',j===i));}
+addEventListener('resize',fit);fit();
+document.addEventListener('keydown',e=>{if(e.key==='ArrowRight'||e.key===' ')show(i+1);if(e.key==='ArrowLeft')show(i-1);});
+</script></body></html>
