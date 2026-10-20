@@ -1,7 +1,8 @@
 ---
 name: editeur-deck
-description: Ajoute l'éditeur admin Licter (modifications par code d'accès, blocs, animations, présentation, artefact claude.ai partagé) à un deck HTML DÉJÀ TERMINÉ. À utiliser UNIQUEMENT quand l'utilisateur demande explicitement d'ajouter l'éditeur Licter à un deck fini (« ajoute l'éditeur », « rends ce deck éditable », « mets l'éditeur Licter dessus ») ou de mettre à jour l'éditeur d'un deck qui l'a déjà. Ne jamais l'utiliser de sa propre initiative, ni pendant la création ou la modification d'un deck, ni pour créer un deck.
+description: Ajoute l'éditeur admin Licter (modifications par code d'accès, blocs, animations, présentation, artefact claude.ai partagé) à un deck HTML déjà terminé. Se lance uniquement par la commande /licter-decks:editeur-deck.
 argument-hint: "[deck_termine.html]"
+disable-model-invocation: true
 allowed-tools: Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/inject.py *), Bash(node ${CLAUDE_SKILL_DIR}/tests/smoke.mjs *), Bash(node ${CLAUDE_SKILL_DIR}/tests/navigation.mjs *)
 ---
 
@@ -9,7 +10,8 @@ allowed-tools: Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/inject.py *), Bash(node 
 
 ## Quand l'utiliser (règle de l'équipe)
 
-- **Seulement sur demande explicite de l'utilisateur**, et **à la fin**, sur un deck **déjà terminé**.
+- **Seulement par la commande `/licter-decks:editeur-deck`** tapée par l'utilisateur (le skill est verrouillé :
+  Claude ne peut pas le lancer de lui-même), et **à la fin**, sur un deck **déjà terminé**.
 - Ne jamais ajouter l'éditeur de sa propre initiative : ni en créant un deck, ni en le modifiant, ni « pour bien faire ».
   Créer un deck reste un travail normal, sans éditeur ; on peut tout au plus rappeler en une ligne, à la livraison,
   que l'éditeur peut être ajouté sur demande.

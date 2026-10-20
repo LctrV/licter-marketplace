@@ -30,9 +30,14 @@ Le plugin apparaît alors pour chacun dans claude.ai, l'application de bureau et
 
 ## Utiliser
 
-L'éditeur **ne s'ajoute jamais tout seul** : Claude crée et modifie les decks normalement. Une fois le deck terminé,
-le demander explicitement : « ajoute l'éditeur Licter à ce deck », « rends ce deck éditable », ou directement
-`/licter-decks:editeur-deck mon_deck.html`. Le skill guide Claude : vérification de la structure, injection,
+L'éditeur **ne s'ajoute jamais tout seul** : Claude crée et modifie les decks normalement, sans lui. Une fois le deck
+terminé, taper la commande :
+
+```text
+/licter-decks:editeur-deck mon_deck.html
+```
+
+C'est le seul moyen de le lancer (le skill est verrouillé : une demande en phrase ne suffit pas). Le skill guide Claude : vérification de la structure, injection,
 test, publication en artefact, transmission du lien et du code admin.
 
 Sans Claude, le script s'utilise seul :

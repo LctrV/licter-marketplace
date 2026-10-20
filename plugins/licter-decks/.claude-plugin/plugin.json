@@ -1,7 +1,7 @@
 {
   "name": "licter-decks",
-  "version": "1.1.1",
-  "description": "Ajoute, sur demande explicite et une fois le deck terminé, l'éditeur admin Licter à n'importe quel deck HTML (défilement vertical, horizontal, diapositives, Reveal.js, scène 1920 × 1080) : modifications par code, blocs, animations, présentation, artefact claude.ai partagé.",
+  "version": "1.1.2",
+  "description": "Ajoute l'éditeur admin Licter à un deck HTML terminé, quel que soit son format (vertical, horizontal, diapositives, Reveal.js, scène 1920 × 1080), uniquement via la commande /licter-decks:editeur-deck.",
   "author": {
     "name": "Licter"
   },
