@@ -24,7 +24,8 @@ claude plugin update licter-decks@licter
 
 1. Cloner le dépôt : `git clone https://github.com/LctrV/licter-marketplace.git`, créer une branche.
 2. Modifier ce qu'il faut :
-   - instructions du skill : `plugins/licter-decks/skills/editeur-deck/SKILL.md` (et `reference/contrat.md`) ;
+   - workflow de création : `plugins/licter-decks/skills/creer-deck/SKILL.md` ;
+   - instructions de l'éditeur : `plugins/licter-decks/skills/editeur-deck/SKILL.md` (et `reference/contrat.md`) ;
    - éditeur : `skills/editeur-deck/assets/editor.js` et `editor.css` ;
    - injection : `scripts/inject.py` ; deck de départ : `templates/deck-vierge.html`.
 3. Tester (Playwright requis : `npm i playwright` dans un dossier de travail) :

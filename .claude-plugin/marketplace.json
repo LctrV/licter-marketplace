@@ -6,7 +6,7 @@
     {
       "name": "licter-decks",
       "source": "./plugins/licter-decks",
-      "description": "Éditeur admin pour les decks et rapports HTML Licter : modifications par code, blocs, graphiques, animations, présentation, enregistrement dans un artefact claude.ai partagé."
+      "description": "Création de decks HTML étape par étape avec validation à chaque étape, et éditeur admin pour les decks et rapports HTML Licter : modifications par code, blocs, graphiques, animations, présentation, enregistrement dans un artefact claude.ai partagé."
     }
   ]
 }

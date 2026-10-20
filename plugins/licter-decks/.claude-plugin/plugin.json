@@ -1,7 +1,7 @@
 {
   "name": "licter-decks",
-  "version": "1.1.2",
-  "description": "Ajoute l'éditeur admin Licter à un deck HTML terminé, quel que soit son format (vertical, horizontal, diapositives, Reveal.js, scène 1920 × 1080), uniquement via la commande /licter-decks:editeur-deck.",
+  "version": "1.2.0",
+  "description": "Construit un deck HTML étape par étape avec validation à chaque étape (/licter-decks:creer-deck), puis ajoute l'éditeur admin Licter à un deck terminé, quel que soit son format (vertical, horizontal, diapositives, Reveal.js, scène 1920 × 1080), uniquement via la commande /licter-decks:editeur-deck.",
   "author": {
     "name": "Licter"
   },
@@ -11,6 +11,8 @@
     "éditeur",
     "rapport",
     "artefact",
-    "licter"
+    "licter",
+    "présentation",
+    "workflow"
   ]
 }
