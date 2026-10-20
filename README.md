@@ -11,16 +11,16 @@ Dépôt « marketplace » interne. Il contient pour l'instant un plugin :
 ### Claude Code (terminal, application de bureau, IDE)
 
 ```bash
-claude plugin marketplace add licter/licter-marketplace
+claude plugin marketplace add https://github.com/LctrV/licter-marketplace.git
 ```
 
 ```bash
 claude plugin install licter-decks@licter
 ```
 
-(ou, dans une session : `/plugin marketplace add licter/licter-marketplace` puis `/plugin install licter-decks@licter`.)
-Le dépôt étant privé, il faut un accès en lecture et git connecté (`gh auth login` puis `gh auth setup-git`).
-Remplacer `licter/licter-marketplace` par l'adresse réelle du dépôt.
+(ou, dans une session : `/plugin marketplace add https://github.com/LctrV/licter-marketplace.git` puis `/plugin install licter-decks@licter`.)
+Le dépôt est privé : il faut y être invité comme collaborateur, et que git puisse s'y connecter en HTTPS
+(`gh auth login` puis `gh auth setup-git`). L'adresse `https://…` évite l'erreur « SSH authentication failed ».
 
 ### claude.ai (pour toute l'organisation)
 
