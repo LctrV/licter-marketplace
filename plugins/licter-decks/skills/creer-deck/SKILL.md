@@ -1,14 +1,15 @@
 ---
 name: creer-deck
-description: Construit un deck de présentation HTML étape par étape (préparer la matière, cadrer, storyline, contenu, direction artistique, squelette, finitions, relecture, oral avec vue présentateur, export, éditeur Licter), en mode complet ou express, en posant des questions et en demandant une validation à chaque étape. À utiliser quand on veut créer un deck, une présentation ou un rapport HTML Licter, sur n'importe quel sujet, à partir d'un brief, de données ou d'une analyse.
+description: Construit un deck de présentation HTML Licter, soit en un seul prompt (fichiers joints + une phrase, deck livré d'une traite puis corrigé), soit étape par étape en mode express ou complet (matière, cadrage, storyline, contenu, direction artistique, squelette, finitions, relecture, oral avec vue présentateur, export, éditeur Licter) avec questions et validation à chaque étape. À utiliser quand on veut créer un deck, des slides, une présentation ou un rapport HTML, sur n'importe quel sujet, à partir d'un brief, de données ou d'une analyse, y compris avec une demande du type « Génère-moi des slides HTML animées et interactives pour… ».
 argument-hint: "[sujet, brief ou dossier de matière]"
 allowed-tools: Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/ajouter_presentateur.py *), Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/notes_editeur.py *), Bash(node ${CLAUDE_SKILL_DIR}/tests/presentateur.mjs *)
 ---
 
 # Créer un deck HTML Licter, étape par étape
 
-Ce skill guide la construction d'un deck HTML en **11 étapes (0 à 10)**, en **mode complet** ou en **mode express**.
-Chaque étape (ou chaque bloc d'étapes en express) suit le même cycle :
+Ce skill construit un deck HTML de trois façons : en **un seul prompt** (le raccourci), en **mode express**
+(4 blocs) ou en **mode complet** (11 étapes, 0 à 10). En express et en complet, chaque étape (ou chaque bloc)
+suit le même cycle :
 
 ```
 Questions → Livrable court → ✅ Validation → étape suivante
@@ -25,7 +26,7 @@ Fichiers du skill :
 
 ## Règles strictes
 
-1. **Choisir le mode avant tout** (voir ci-dessous), puis **une seule étape (ou un seul bloc) à la fois**. Annoncer
+1. **Choisir le mode avant tout** (voir ci-dessous). En express et en complet : **une seule étape (ou un seul bloc) à la fois**. Annoncer
    où l'on en est : « **Étape 2/10 : Storyline** » ou « **Bloc 1/4 : Matière, cadrage, storyline** ».
 2. **Commencer chaque étape par 3 à 5 questions pertinentes**, adaptées à ce qui est déjà connu. Ne jamais poser une
    question dont la réponse se trouve dans la matière fournie ou dans les échanges précédents ; supprimer les questions
@@ -35,6 +36,7 @@ Fichiers du skill :
 4. **Ne jamais passer à l'étape suivante sans un OK explicite** (« ok », « validé », « go »…). Un silence, une question
    ou une remarque n'est pas une validation. Après une correction, représenter le livrable corrigé et redemander.
 5. **Ne pas écrire de code avant l'étape 5** (bloc 3 en express). Les étapes précédentes se font en texte.
+   Les règles 1 à 5 sont allégées en mode 1 prompt (voir sa section) ; les règles 6 à 9 s'appliquent partout.
 6. Pour un choix, proposer **2 ou 3 options au maximum, avec une recommandation**.
 7. **N'inventer aucun chiffre** : n'utiliser que ceux de la matière fournie, citer la source, signaler tout manque.
    Ne pas recalculer un KPI déjà fourni.
@@ -46,13 +48,54 @@ Si `$ARGUMENTS` contient un sujet, un brief ou un chemin de dossier, s'en servir
 
 ## Choisir le mode (première question, toujours)
 
-Demander : « Mode complet ou mode express ? » avec une recommandation selon ce qu'on sait déjà :
+Demander : « 1 prompt, express ou complet ? » avec une recommandation selon ce qu'on sait déjà.
+**Exception** : si la demande est déjà un prompt complet (fichiers joints ou cités, public, sujet, et une consigne du
+type « génère-moi le deck »), ne pas poser la question : annoncer en une ligne « Mode 1 prompt » et le lancer, en
+rappelant qu'on peut basculer en express ou en complet à tout moment.
 
-| | Mode complet | Mode express |
-|---|---|---|
-| Pour | deck client, comité, enjeu fort, plus de 10 slides | deck interne, atelier, moins de 10 slides, délai court |
-| Étapes | les 11 étapes, une validation chacune | 4 blocs, 4 validations |
-| Oral (étape 8) | complet : notes, minutage, questions difficiles, répétition | notes et durées proposées d'office, vue présentateur incluse |
+| | 1 prompt (raccourci) | Mode express | Mode complet |
+|---|---|---|---|
+| Pour | premier jet, idée, brouillon, deck interne rapide | deck interne, atelier, moins de 10 slides, délai court | deck client, comité, enjeu fort, plus de 10 slides |
+| Validations | 1, sur le deck terminé | 4 blocs, 4 validations | les 11 étapes, une validation chacune |
+| Questions | 0 à 3, seulement si une information bloque | 5 au maximum par bloc | 3 à 5 par étape |
+| Oral (étape 8) | notes et durées proposées d'office, vue présentateur incluse | idem | complet : notes, minutage, questions difficiles, répétition |
+
+### Mode 1 prompt : le deck d'une traite
+
+L'utilisateur donne ses fichiers et une phrase. Prompt type, à proposer tel quel à qui ne sait pas par où commencer :
+
+```text
+Génère-moi un deck de slides HTML animé, interactif et designé, pour [public] sur le sujet [sujet].
+Prends les chiffres uniquement dans les fichiers joints et cite la source sous chaque graphique.
+Respecte [la charte Licter | la charte du client | un style à proposer].
+[12] slides, [20 minutes] d'oral, mes notes sous chaque slide. Un seul fichier HTML, en 16:9, navigable au clavier.
+```
+
+Déroulé :
+1. **Lire toute la matière** (étape 0 faite en silence) et en déduire le cadrage, la storyline et le style.
+   Poser **au maximum 3 questions, en une seule fois**, uniquement si une information manque vraiment et ne peut pas
+   être supposée (public inconnu, aucune donnée pour un deck chiffré, charte introuvable). Sinon, ne rien demander :
+   choisir des valeurs par défaut raisonnables (charte Licter, 10 à 12 slides, 20 minutes, diapositives 16:9).
+2. **Annoncer le plan en 5 lignes maximum** (message clé, public, nombre de slides, style, durée) puis enchaîner
+   **sans attendre de validation**.
+3. **Construire le deck complet d'une traite**, en appliquant les étapes 3 à 8 sans s'arrêter :
+   titres qui affirment (étape 2), une slide = un message + une preuve (étape 3), planche de style appliquée (étape 4),
+   **toutes les règles de construction de l'étape 5** (`<section id>` stables, `window.__DECK__`, `deck:change`),
+   finitions et animations (étape 6), notes orales et `data-duree` sur chaque slide, vue présentateur insérée avec
+   le script et testée (étape 8).
+4. **Relire comme à l'étape 7, sans le demander** : chaque chiffre comparé à sa source, aucun chiffre inventé,
+   textes courts, débordements vérifiés sur une capture si l'environnement le permet.
+5. **Livrer** : le fichier (ou l'aperçu), puis un récapitulatif court : plan des slides (un titre par ligne),
+   hypothèses prises faute d'information, chiffres **à vérifier** et leur source, durée totale.
+   Terminer par : « ✅ Je valide / ❌ Je corrige : qu'est-ce qui ne va pas ? »
+6. **Corriger par petites demandes** : une remarque = une modification ciblée, puis montrer le résultat. Si les
+   corrections touchent le récit ou le cadrage plus d'une ou deux fois, proposer de basculer en mode express pour
+   reprendre proprement à partir du bloc concerné.
+7. Une fois le deck validé : proposer l'export (étape 9) et rappeler en une ligne que l'éditeur s'ajoute avec
+   `/licter-decks:editeur-deck` (étape 10, inchangée).
+
+Limites à dire à l'utilisateur dès la livraison : le raccourci donne un premier jet en quelques minutes, mais rien
+n'a été validé en cours de route ; pour un deck client ou un comité, relire chaque chiffre ou passer en mode complet.
 
 ### Mode express : les 4 blocs
 
@@ -336,5 +379,5 @@ s'enregistre, la touche P fonctionne et le lien marche chez un destinataire. »
 
 ## Fin du workflow
 
-Terminer par un récapitulatif court : mode suivi, message clé, nombre de slides, durée prévue, fichiers produits,
+Terminer par un récapitulatif court : mode suivi (1 prompt, express ou complet), message clé, nombre de slides, durée prévue, fichiers produits,
 lien éventuel, et ce qui reste à faire (répétition, relecture par un tiers, éditeur à ajouter…).

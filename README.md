@@ -4,7 +4,7 @@ Dépôt « marketplace » interne. Il contient pour l'instant un plugin :
 
 | Plugin | Contenu |
 |---|---|
-| `licter-decks` | Skill **creer-deck** : construit un deck HTML étape par étape (matière, cadrage, storyline, contenu, style, squelette, finitions, relecture, oral, export, éditeur), en mode complet ou express, avec questions et validation à chaque étape, et une vue présentateur (notes, slide suivante, chronomètres, écran noir). Skill **editeur-deck** : rend n'importe quel deck ou rapport HTML éditable par l'équipe (éditeur admin par code, 46 à 67 blocs, graphiques, animations et transitions, mode présentation, assistant IA, enregistrement dans un artefact claude.ai partagé), pour tout format de deck (défilement vertical, horizontal, diapositives, Reveal.js, scène 1920 × 1080), avec un deck de départ et des tests automatiques. |
+| `licter-decks` | Skill **creer-deck** : construit un deck HTML en un seul prompt, ou étape par étape (matière, cadrage, storyline, contenu, style, squelette, finitions, relecture, oral, export, éditeur) en mode express ou complet, avec questions et validation à chaque étape, et une vue présentateur (notes, slide suivante, chronomètres, écran noir). Skill **editeur-deck** : rend n'importe quel deck ou rapport HTML éditable par l'équipe (éditeur admin par code, 46 à 67 blocs, graphiques, animations et transitions, mode présentation, assistant IA, enregistrement dans un artefact claude.ai partagé), pour tout format de deck (défilement vertical, horizontal, diapositives, Reveal.js, scène 1920 × 1080), avec un deck de départ et des tests automatiques. |
 
 ## Installer (chaque membre de l'équipe)
 
@@ -38,6 +38,18 @@ Le plugin apparaît alors pour chacun dans claude.ai, l'application de bureau et
 
 Claude demande d'abord le mode :
 
+- **1 prompt** (le raccourci) : vous joignez vos fichiers et écrivez une phrase, Claude livre le deck d'une traite
+  (notes, durées et vue présentateur compris), puis vous le corrigez par petites demandes. Une seule validation, sur
+  le deck terminé. Idéal pour un premier jet ou un deck interne. Prompt type :
+
+  ```text
+  Génère-moi un deck de slides HTML animé, interactif et designé, pour [public] sur le sujet [sujet].
+  Prends les chiffres uniquement dans les fichiers joints et cite la source sous chaque graphique.
+  Respecte la charte Licter. 12 slides, 20 minutes d'oral, mes notes sous chaque slide.
+  Un seul fichier HTML, en 16:9, navigable au clavier.
+  ```
+
+  Si la demande est déjà un prompt complet comme celui-ci, Claude ne pose pas la question du mode et lance le raccourci.
 - **complet** : 11 étapes (0 à 10), une validation chacune : préparer la matière, cadrer, storyline, contenu,
   direction artistique, squelette, finitions, relecture, oral, export, éditeur Licter ;
 - **express** : les mêmes étapes regroupées en 4 blocs, 4 validations (decks internes, ateliers, délais courts).

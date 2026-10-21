@@ -1,12 +1,14 @@
 {
   "name": "licter",
   "description": "Plugins internes Licter pour Claude",
-  "owner": { "name": "Licter" },
+  "owner": {
+    "name": "Licter"
+  },
   "plugins": [
     {
       "name": "licter-decks",
       "source": "./plugins/licter-decks",
-      "description": "Création de decks HTML étape par étape (mode complet ou express, validation à chaque étape, vue présentateur), et éditeur admin pour les decks et rapports HTML Licter : modifications par code, blocs, graphiques, animations, présentation, enregistrement dans un artefact claude.ai partagé."
+      "description": "Création de decks HTML en un seul prompt ou étape par étape (mode express ou complet, validation à chaque étape, vue présentateur), et éditeur admin pour les decks et rapports HTML Licter : modifications par code, blocs, graphiques, animations, présentation, enregistrement dans un artefact claude.ai partagé."
     }
   ]
 }

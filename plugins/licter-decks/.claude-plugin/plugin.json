@@ -1,7 +1,7 @@
 {
   "name": "licter-decks",
-  "version": "1.3.0",
-  "description": "Construit un deck HTML étape par étape, en mode complet ou express, avec validation à chaque étape et vue présentateur (/licter-decks:creer-deck), puis ajoute l'éditeur admin Licter à un deck terminé, quel que soit son format (vertical, horizontal, diapositives, Reveal.js, scène 1920 × 1080), uniquement via la commande /licter-decks:editeur-deck.",
+  "version": "1.4.0",
+  "description": "Construit un deck HTML Licter en un seul prompt, ou étape par étape en mode express ou complet, avec validation à chaque étape et vue présentateur (/licter-decks:creer-deck), puis ajoute l'éditeur admin Licter à un deck terminé, quel que soit son format (vertical, horizontal, diapositives, Reveal.js, scène 1920 × 1080), uniquement via la commande /licter-decks:editeur-deck.",
   "author": {
     "name": "Licter"
   },
@@ -14,6 +14,7 @@
     "licter",
     "présentation",
     "workflow",
-    "vue présentateur"
+    "vue présentateur",
+    "prompt"
   ]
 }
