@@ -19,13 +19,13 @@ claude plugin install licter-decks@licter
 ```
 
 (ou, dans une session : `/plugin marketplace add https://github.com/LctrV/licter-marketplace.git` puis `/plugin install licter-decks@licter`.)
-Le dépôt est privé : il faut y être invité comme collaborateur, et que git puisse s'y connecter en HTTPS
-(`gh auth login` puis `gh auth setup-git`). L'adresse `https://…` évite l'erreur « SSH authentication failed ».
+Le dépôt est public : aucun compte GitHub n'est nécessaire. Utiliser l'adresse `https://…` (et non `git@github.com:…`),
+qui évite l'erreur « SSH authentication failed ».
 
 ### claude.ai (pour toute l'organisation)
 
 Un propriétaire de l'organisation l'ajoute une fois : **Paramètres de l'organisation → Plugins & skills → Ajouter →
-Synchroniser depuis GitHub** (dépôt privé), puis choisit l'accès par défaut (« Installé par défaut » conseillé).
+Synchroniser depuis GitHub**, puis choisit l'accès par défaut (« Installé par défaut » conseillé).
 Le plugin apparaît alors pour chacun dans claude.ai, l'application de bureau et Claude Code (`licter-decks@synced`).
 
 ## Utiliser
