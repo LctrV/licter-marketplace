@@ -1,6 +1,6 @@
 ---
 name: creer-deck
-description: Construit un deck de présentation HTML Licter, soit en un seul prompt (fichiers joints + une phrase, deck livré d'une traite puis corrigé), soit étape par étape en mode express ou complet (matière, cadrage, storyline, contenu, direction artistique, squelette, finitions, relecture, oral avec vue présentateur, export, éditeur Licter) avec questions et validation à chaque étape. À utiliser quand on veut créer un deck, des slides, une présentation ou un rapport HTML, sur n'importe quel sujet, à partir d'un brief, de données ou d'une analyse, y compris avec une demande du type « Génère-moi des slides HTML animées et interactives pour… ».
+description: Construit un deck de présentation HTML Licter, soit en un seul prompt (fichiers joints + une phrase, structure des slides validée puis deck livré d'une traite), soit étape par étape en mode express ou complet (matière, cadrage, storyline, contenu, direction artistique, squelette, finitions, relecture, oral avec vue présentateur, export, éditeur Licter) avec questions et validation à chaque étape. À utiliser quand on veut créer un deck, des slides, une présentation ou un rapport HTML, sur n'importe quel sujet, à partir d'un brief, de données ou d'une analyse, y compris avec une demande du type « Génère-moi des slides HTML animées et interactives pour… ».
 argument-hint: "[sujet, brief ou dossier de matière]"
 allowed-tools: Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/ajouter_presentateur.py *), Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/notes_editeur.py *), Bash(node ${CLAUDE_SKILL_DIR}/tests/presentateur.mjs *)
 ---
@@ -56,7 +56,7 @@ rappelant qu'on peut basculer en express ou en complet à tout moment.
 | | 1 prompt (raccourci) | Mode express | Mode complet |
 |---|---|---|---|
 | Pour | premier jet, idée, brouillon, deck interne rapide | deck interne, atelier, moins de 10 slides, délai court | deck client, comité, enjeu fort, plus de 10 slides |
-| Validations | 1, sur le deck terminé | 4 blocs, 4 validations | les 11 étapes, une validation chacune |
+| Validations | 2 : la structure des slides, puis le deck terminé | 4 blocs, 4 validations | les 11 étapes, une validation chacune |
 | Questions | 0 à 3, seulement si une information bloque | 5 au maximum par bloc | 3 à 5 par étape |
 | Oral (étape 8) | notes et durées proposées d'office, vue présentateur incluse | idem | complet : notes, minutage, questions difficiles, répétition |
 
@@ -76,9 +76,14 @@ Déroulé :
    Poser **au maximum 3 questions, en une seule fois**, uniquement si une information manque vraiment et ne peut pas
    être supposée (public inconnu, aucune donnée pour un deck chiffré, charte introuvable). Sinon, ne rien demander :
    choisir des valeurs par défaut raisonnables (charte Licter, 10 à 12 slides, 20 minutes, diapositives 16:9).
-2. **Annoncer le plan en 5 lignes maximum** (message clé, public, nombre de slides, style, durée) puis enchaîner
-   **sans attendre de validation**.
-3. **Construire le deck complet d'une traite**, en appliquant les étapes 3 à 8 sans s'arrêter :
+2. **Montrer la structure des slides avant de construire**, sans écrire de code :
+   - le message clé en une phrase, le public, le style retenu et la durée totale ;
+   - un tableau slide par slide : numéro, titre qui affirme, contenu ou visuel prévu, source des chiffres, durée.
+
+   Terminer par : « ✅ Je lance la construction / ❌ Je modifie la structure ». **Attendre ce OK** : c'est la seule
+   validation avant le deck. Changer une ligne ici coûte une phrase ; refaire une slide après coûte un aller-retour.
+   Après une modification, remontrer le tableau corrigé et redemander.
+3. **Construire le deck complet d'une traite**, fidèle à la structure validée, en appliquant les étapes 3 à 8 sans s'arrêter :
    titres qui affirment (étape 2), une slide = un message + une preuve (étape 3), planche de style appliquée (étape 4),
    **toutes les règles de construction de l'étape 5** (`<section id>` stables, `window.__DECK__`, `deck:change`),
    finitions et animations (étape 6), notes orales et `data-duree` sur chaque slide, vue présentateur insérée avec
@@ -94,8 +99,8 @@ Déroulé :
 7. Une fois le deck validé : proposer l'export (étape 9) et rappeler en une ligne que l'éditeur s'ajoute avec
    `/licter-decks:editeur-deck` (étape 10, inchangée).
 
-Limites à dire à l'utilisateur dès la livraison : le raccourci donne un premier jet en quelques minutes, mais rien
-n'a été validé en cours de route ; pour un deck client ou un comité, relire chaque chiffre ou passer en mode complet.
+Limites à dire à l'utilisateur dès la livraison : le raccourci donne un premier jet en quelques minutes, mais seule la
+structure a été validée en cours de route ; pour un deck client ou un comité, relire chaque chiffre ou passer en mode complet.
 
 ### Mode express : les 4 blocs
 

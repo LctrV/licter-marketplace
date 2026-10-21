@@ -38,9 +38,9 @@ Le plugin apparaît alors pour chacun dans claude.ai, l'application de bureau et
 
 Claude demande d'abord le mode :
 
-- **1 prompt** (le raccourci) : vous joignez vos fichiers et écrivez une phrase, Claude livre le deck d'une traite
-  (notes, durées et vue présentateur compris), puis vous le corrigez par petites demandes. Une seule validation, sur
-  le deck terminé. Idéal pour un premier jet ou un deck interne. Prompt type :
+- **1 prompt** (le raccourci) : vous joignez vos fichiers et écrivez une phrase. Claude montre d'abord la structure
+  des slides (titre, contenu, durée de chacune) et attend votre OK, puis livre le deck d'une traite (notes, durées et
+  vue présentateur compris), que vous corrigez par petites demandes. Deux validations : la structure, puis le deck. Idéal pour un premier jet ou un deck interne. Prompt type :
 
   ```text
   Génère-moi un deck de slides HTML animé, interactif et designé, pour [public] sur le sujet [sujet].
